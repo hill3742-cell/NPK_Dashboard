@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from keeper_rules import calculate_keeper_cost, validate_keeper_selections
 
-st.set_page_config(page_title="NPK FF Dashboard", layout="wide")
+st.set_page_config(page_title="No Pain Keeper", page_icon="app_icon.png", layout="wide")
 st.title("🏈 NPK Fantasy Football League Dashboard")
 st.caption("League ID: 31198 | 12 Teams | 24 Draft Rounds")
 
@@ -77,18 +77,44 @@ with tab2:
         """)
 
 with tab3:
-    with tab3:
     st.subheader("League History & Archives")
-    st.write("Select a season year below to view its historical recap images:")
+    st.write("Select a season below to view its complete historical pages.")
+
+    # Master Archive Download Button
+    master_pdf = "No Pain Keeper League - All Seasons History.pdf"
+    if os.path.exists(master_pdf):
+        with open(master_pdf, "rb") as pdf_file:
+            st.download_button(
+                label="📥 Download Master All-Seasons History PDF",
+                data=pdf_file,
+                file_name=master_pdf,
+                mime="application/pdf",
+                use_container_width=True
+            )
+
+    st.divider()
+    st.subheader("Season Archive Viewer")
 
     years = list(range(2025, 2010, -1))
     selected_year = st.selectbox("Choose Season Archive Year", years)
 
     if selected_year:
-        # This assumes your images are saved as PNGs with this exact naming format
-        image_filename = f"{selected_year}_season_history.png"
+        st.info(f"📸 Displaying history pages for the **{selected_year} Season**:")
         
-        if os.path.exists(image_filename):
-            st.image(image_filename, caption=f"{selected_year} Season History", use_container_width=True)
-        else:
+        # Loop through and display all available pages for the selected year
+        page_num = 1
+        images_found = False
+        
+        while True:
+            image_filename = f"{selected_year}_season_history_page_{page_num}.png"
+            if os.path.exists(image_filename):
+                st.image(image_filename, use_container_width=True)
+                # Add a small divider between pages if there are multiple
+                st.markdown("---")
+                page_num += 1
+                images_found = True
+            else:
+                break
+        
+        if not images_found:
             st.warning(f"⚠️ Image archive for {selected_year} not found in the folder.")
