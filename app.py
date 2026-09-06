@@ -79,9 +79,9 @@ with tab2:
 
 with tab3:
     st.subheader("League History & Archives")
-    st.write("Select a season year below to view its complete historical documentation pages right in the app, or download the master archive.")
+    st.write("Access and download official historical season records and master archives.")
 
-    # PDF Download Option for the master history file
+    # Master Archive Download Button
     master_pdf = "No Pain Keeper League - All Seasons History.pdf"
     if os.path.exists(master_pdf):
         with open(master_pdf, "rb") as pdf_file:
@@ -89,27 +89,35 @@ with tab3:
                 label="📥 Download Master All-Seasons History PDF",
                 data=pdf_file,
                 file_name=master_pdf,
-                mime="application/pdf"
+                mime="application/pdf",
+                use_container_width=True
             )
 
     st.divider()
-    st.subheader("Season Archive Viewer")
+    st.subheader("Individual Season Archive Downloads")
+    st.write("Tap any season below to download or view its historical record PDF directly on your phone or computer:")
 
-    # Mapping years to the exact filename format found in your folder screenshot
-    years = list(range(2025, 2010, -1))  # 2025 down to 2011
-    selected_year = st.selectbox("Choose Season Archive Year", years)
-
-    if selected_year:
-        year_pdf_filename = f"No Pain Keeper League - {selected_year} Season History.pdf"
+    # Loop through years 2025 down to 2011 to create clean download buttons
+    years = list(range(2025, 2010, -1))
+    
+    # Display in 2 columns for a clean mobile/desktop layout
+    col_y1, col_y2 = st.columns(2)
+    
+    for i, year in enumerate(years):
+        year_pdf_filename = f"No Pain Keeper League - {year} Season History.pdf"
         
-        if os.path.exists(year_pdf_filename):
-            st.info(f"📄 Rendering full history pages for the **{selected_year} Season**:")
-            
-            # Read and render the specific year's PDF file directly via an HTML iframe
-            with open(year_pdf_filename, "rb") as f:
-                base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                
-            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="850px" type="application/pdf"></iframe>'
-            st.markdown(pdf_display, unsafe_allow_html=True)
-        else:
-            st.warning(f"⚠️ Could not find file: `{year_pdf_filename}` in directory. Ensure it matches your folder's exact naming convention.")
+        target_col = col_y1 if i % 2 == 0 else col_y2
+        
+        with target_col:
+            if os.path.exists(year_pdf_filename):
+                with open(year_pdf_filename, "rb") as f:
+                    st.download_button(
+                        label=f"📄 {year} Season History",
+                        data=f.read(),
+                        file_name=year_pdf_filename,
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key=f"download_{year}"
+                    )
+            else:
+                st.caption(f"⚠️ {year} archive missing")
