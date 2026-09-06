@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import base64
 from keeper_rules import calculate_keeper_cost, validate_keeper_selections
 
 st.set_page_config(page_title="NPK FF Dashboard", layout="wide")
@@ -79,7 +78,7 @@ with tab2:
 
 with tab3:
     st.subheader("League History & Archives")
-    st.write("Access and download official historical season records and master archives.")
+    st.write("Select a season below to view its complete historical pages.")
 
     # Master Archive Download Button
     master_pdf = "No Pain Keeper League - All Seasons History.pdf"
@@ -94,30 +93,28 @@ with tab3:
             )
 
     st.divider()
-    st.subheader("Individual Season Archive Downloads")
-    st.write("Tap any season below to download or view its historical record PDF directly on your phone or computer:")
+    st.subheader("Season Archive Viewer")
 
-    # Loop through years 2025 down to 2011 to create clean download buttons
     years = list(range(2025, 2010, -1))
-    
-    # Display in 2 columns for a clean mobile/desktop layout
-    col_y1, col_y2 = st.columns(2)
-    
-    for i, year in enumerate(years):
-        year_pdf_filename = f"No Pain Keeper League - {year} Season History.pdf"
+    selected_year = st.selectbox("Choose Season Archive Year", years)
+
+    if selected_year:
+        st.info(f"📸 Displaying history pages for the **{selected_year} Season**:")
         
-        target_col = col_y1 if i % 2 == 0 else col_y2
+        # Loop through and display all available pages for the selected year
+        page_num = 1
+        images_found = False
         
-        with target_col:
-            if os.path.exists(year_pdf_filename):
-                with open(year_pdf_filename, "rb") as f:
-                    st.download_button(
-                        label=f"📄 {year} Season History",
-                        data=f.read(),
-                        file_name=year_pdf_filename,
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key=f"download_{year}"
-                    )
+        while True:
+            image_filename = f"{selected_year}_season_history_page_{page_num}.png"
+            if os.path.exists(image_filename):
+                st.image(image_filename, use_container_width=True)
+                # Add a small divider between pages if there are multiple
+                st.markdown("---")
+                page_num += 1
+                images_found = True
             else:
-                st.caption(f"⚠️ {year} archive missing")
+                break
+        
+        if not images_found:
+            st.warning(f"⚠️ Image archive for {selected_year} not found in the folder.")
