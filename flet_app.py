@@ -15,6 +15,14 @@ os.makedirs(WEEKLY_DIR, exist_ok=True)
 os.makedirs(HISTORY_DIR, exist_ok=True)
 
 
+def create_option(key: str, text: str = None):
+    """Maintains dropdown option compatibility across Flet releases."""
+    label = text if text is not None else str(key)
+    if hasattr(ft, "DropdownOption"):
+        return ft.DropdownOption(key=str(key), text=label)
+    return ft.dropdown.Option(str(key), label)
+
+
 # ---------------------------------------------------------
 # TAB 1: KEEPER CALCULATOR & VALIDATOR
 # ---------------------------------------------------------
@@ -23,16 +31,20 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
     dd_side = ft.Dropdown(
         label="Side of Ball",
         value="Offense",
-        options=[ft.dropdown.Option("Offense"), ft.dropdown.Option("Defense"), ft.dropdown.Option("Special Teams")],
+        options=[
+            create_option("Offense"),
+            create_option("Defense"),
+            create_option("Special Teams"),
+        ],
         width=160,
     )
     dd_year = ft.Dropdown(
         label="Years Kept",
         value="1",
         options=[
-            ft.dropdown.Option("1", "1st Time (2nd Year)"),
-            ft.dropdown.Option("2", "2nd Time (3rd Year)"),
-            ft.dropdown.Option("3", "3rd+ Time (4th+ Year)"),
+            create_option("1", "1st Time (2nd Year)"),
+            create_option("2", "2nd Time (3rd Year)"),
+            create_option("3", "3rd+ Time (4th+ Year)"),
         ],
         width=200,
     )
@@ -76,12 +88,18 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
     chk_undrafted.on_change = on_undrafted_toggle
     rg_priority.visible = False
     rg_priority.on_change = calculate_cost
+
     dd_side.on_change = calculate_cost
+    if hasattr(dd_side, "on_select"):
+        dd_side.on_select = calculate_cost
+
     dd_year.on_change = calculate_cost
+    if hasattr(dd_year, "on_select"):
+        dd_year.on_select = calculate_cost
+
     txt_player.on_change = calculate_cost
     txt_prior_round.on_change = calculate_cost
 
-    # Keeper Validator Section
     validator_result = ft.Column()
 
     def run_validation(e=None):
@@ -190,7 +208,6 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         history_display.controls.clear()
         found_images = []
 
-        # Check assets/history and assets for year images
         search_dirs = [HISTORY_DIR, ASSETS_DIR]
         pattern = re.compile(rf"^{year}.*\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
 
@@ -215,7 +232,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
     years = [str(y) for y in range(2025, 2010, -1)]
     dd_history_year = ft.Dropdown(
         label="Select Season",
-        options=[ft.dropdown.Option(y) for y in years],
+        options=[create_option(y) for y in years],
         value="2025",
         width=180,
     )
@@ -224,6 +241,9 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         load_season_images(dd_history_year.value)
 
     dd_history_year.on_change = on_year_select
+    if hasattr(dd_history_year, "on_select"):
+        dd_history_year.on_select = on_year_select
+
     load_season_images("2025")
 
     return ft.ListView(
@@ -321,21 +341,19 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
             available_years = [current_year]
 
         target_year = selected_year or (current_year if current_year in available_years else available_years[0])
-        dd_year.options = [ft.dropdown.Option(str(y)) for y in available_years]
+        dd_year.options = [create_option(str(y)) for y in available_years]
         dd_year.value = str(target_year)
 
         year_items = [i for i in items if i["year"] == target_year]
 
-        # Newest weeks first
         previews = sorted([i for i in year_items if i["type"] == "Preview"], key=lambda x: x["week"], reverse=True)
-        dd_preview.options = [ft.dropdown.Option(p["filename"], f"Week {p['week']} Preview") for p in previews]
+        dd_preview.options = [create_option(p["filename"], f"Week {p['week']} Preview") for p in previews]
         dd_preview.value = None
 
         recaps = sorted([i for i in year_items if i["type"] == "Recap"], key=lambda x: x["week"], reverse=True)
-        dd_recap.options = [ft.dropdown.Option(r["filename"], f"Week {r['week']} Recap") for r in recaps]
+        dd_recap.options = [create_option(r["filename"], f"Week {r['week']} Recap") for r in recaps]
         dd_recap.value = None
 
-        # Highest priority: Week * 10 + (2 for Recap, 1 for Preview)
         if year_items:
             latest = max(year_items, key=lambda x: x["priority"])
             if latest["type"] == "Preview":
@@ -350,8 +368,16 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         populate_controls(int(dd_year.value))
 
     dd_year.on_change = on_year_change
+    if hasattr(dd_year, "on_select"):
+        dd_year.on_select = on_year_change
+
     dd_preview.on_change = on_selection_change
+    if hasattr(dd_preview, "on_select"):
+        dd_preview.on_select = on_selection_change
+
     dd_recap.on_change = on_selection_change
+    if hasattr(dd_recap, "on_select"):
+        dd_recap.on_select = on_selection_change
 
     populate_controls()
 
@@ -386,16 +412,35 @@ def main(page: ft.Page):
         bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
     )
 
+    tab_views = [
+        build_keeper_tab(page),
+        build_rules_tab(page),
+        build_history_tab(page),
+        build_weekly_tab(page),
+    ]
+
     tabs = ft.Tabs(
+        length=4,
         selected_index=0,
-        animation_duration=300,
-        tabs=[
-            ft.Tab(text="Keeper Calculator", content=build_keeper_tab(page)),
-            ft.Tab(text="Rules & Settings", content=build_rules_tab(page)),
-            ft.Tab(text="History Archives", content=build_history_tab(page)),
-            ft.Tab(text="Weekly Hub", content=build_weekly_tab(page)),
-        ],
         expand=True,
+        content=ft.Column(
+            expand=True,
+            controls=[
+                ft.TabBar(
+                    scrollable=True,
+                    tabs=[
+                        ft.Tab(label="Keeper Calculator"),
+                        ft.Tab(label="Rules & Settings"),
+                        ft.Tab(label="History Archives"),
+                        ft.Tab(label="Weekly Hub"),
+                    ],
+                ),
+                ft.TabBarView(
+                    expand=True,
+                    controls=tab_views,
+                ),
+            ],
+        ),
     )
 
     page.add(tabs)
