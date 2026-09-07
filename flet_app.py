@@ -189,4 +189,11 @@ def main(page: ft.Page):
     page.add(header, tabs)
     show_history(None)
 
-ft.app(target=main, assets_dir="assets", view=ft.AppView.WEB_BROWSER)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8550))
+    if "PORT" in os.environ:
+        # Render cloud mode (binds to Render's dynamic port)
+        ft.run(main, host="0.0.0.0", port=port, assets_dir="assets")
+    else:
+        # Local computer mode (opens your browser)
+        ft.run(main, assets_dir="assets", view=ft.AppView.WEB_BROWSER)
