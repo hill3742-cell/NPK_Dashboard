@@ -1,28 +1,43 @@
-import fitz  # PyMuPDF
-import glob
+import os
+import tkinter as tk
+from tkinter import messagebox
 
-# Find all the individual yearly PDFs in your folder
-pdf_files = glob.glob("No Pain Keeper League - * Season History.pdf")
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showerror("Missing PyMuPDF", "PyMuPDF is required. Run 'pip install pymupdf' in terminal.")
+    exit()
 
-if not pdf_files:
-    print("No yearly PDF files found to convert.")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TARGET_DIR = os.path.join(BASE_DIR, "assets", "history")
+os.makedirs(TARGET_DIR, exist_ok=True)
 
-for pdf_path in pdf_files:
-    # Extract just the year from the file name
-    year = pdf_path.split(" - ")[1].split(" ")[0]
-    
-    # Open the PDF file
-    doc = fitz.open(pdf_path)
-    
-    # Loop through every page in the PDF
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        
-        # Render the page to a high-resolution image (200 DPI)
-        pix = page.get_pixmap(dpi=200)
-        
-        # Save the image with the year and page number
-        output_name = f"{year}_season_history_page_{page_num + 1}.png"
-        pix.save(output_name)
-        
-        print(f"Converted {year} Page {page_num + 1} -> {output_name}")
+# Look for the PDF in the tools folder or the project root
+pdf_name = "No Pain Keeper League - All Seasons History.pdf"
+local_pdf = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_name)
+root_pdf = os.path.join(BASE_DIR, pdf_name)
+
+pdf_path = local_pdf if os.path.exists(local_pdf) else (root_pdf if os.path.exists(root_pdf) else None)
+
+root = tk.Tk()
+root.withdraw()
+
+if not pdf_path:
+    messagebox.showerror("File Not Found", f"Could not find '{pdf_name}' in tools or root directory.")
+    exit()
+
+doc = fitz.open(pdf_path)
+total_pages = len(doc)
+
+# Pages map chronologically: Page 0 = 2011 up through latest season
+start_year = 2011
+for page_num in range(total_pages):
+    season_year = start_year + page_num
+    page = doc[page_num]
+    pix = page.get_pixmap(dpi=150)
+    out_file = os.path.join(TARGET_DIR, f"{season_year}_season_history.png")
+    pix.save(out_file)
+
+messagebox.showinfo("Conversion Complete", f"Successfully converted {total_pages} seasons to:\n{TARGET_DIR}")
