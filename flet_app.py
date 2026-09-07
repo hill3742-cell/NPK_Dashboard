@@ -204,7 +204,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         if found_images:
             for img_path in found_images:
                 history_display.controls.append(
-                    ft.Image(src=img_path, fit=ft.ImageFit.CONTAIN, expand=True)
+                    ft.Image(src=img_path, fit="contain", expand=True)
                 )
         else:
             history_display.controls.append(
@@ -277,7 +277,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
             status_label.value = f"Showing: {item['year']} Week {item['week']} {item['type']}"
             if item["ext"] in ["png", "jpg", "jpeg", "webp"]:
                 content_display.controls.append(
-                    ft.Image(src=item["path"], fit=ft.ImageFit.CONTAIN, expand=True)
+                    ft.Image(src=item["path"], fit="contain", expand=True)
                 )
             elif item["ext"] == "txt":
                 full_path = os.path.join(WEEKLY_DIR, item["filename"])
@@ -381,7 +381,7 @@ def main(page: ft.Page):
     page.padding = 0
 
     page.appbar = ft.AppBar(
-        leading=ft.Image(src="/icons/icon-192.png", fit=ft.ImageFit.CONTAIN),
+        leading=ft.Image(src="/icons/icon-192.png", fit="contain"),
         title=ft.Text("NPK Fantasy Football League"),
         bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
     )
