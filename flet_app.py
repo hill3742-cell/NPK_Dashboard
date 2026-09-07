@@ -14,6 +14,13 @@ HISTORY_DIR = os.path.join(ASSETS_DIR, "history")
 os.makedirs(WEEKLY_DIR, exist_ok=True)
 os.makedirs(HISTORY_DIR, exist_ok=True)
 
+# Theme color hex codes
+BG_SURFACE = "#1e222a"
+BG_SURFACE_LIGHT = "#282c37"
+ACCENT_AMBER = "#ffb300"
+COLOR_GREEN = "#4caf50"
+COLOR_RED = "#e53935"
+
 
 def create_option(key: str, text: str = None):
     """Maintains dropdown option compatibility across Flet versions."""
@@ -24,7 +31,7 @@ def create_option(key: str, text: str = None):
 
 
 # ---------------------------------------------------------
-# TAB: WEEKLY HUB (PREVIEWS & RECAPS)
+# TAB: WEEKLY HUB (PREVIEWS & RECAPS WITH ZOOM)
 # ---------------------------------------------------------
 def get_weekly_items():
     """Scans assets/weekly for files matching: YYYY_W{num}_(preview|recap)[_p{num}].ext"""
@@ -53,10 +60,47 @@ def get_weekly_items():
 
 def build_weekly_tab(page: ft.Page) -> ft.Control:
     content_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    status_label = ft.Text("", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_300)
+    status_label = ft.Text("", size=15, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
+
+    weekly_scale = [1.0]
+    weekly_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
+    weekly_containers = []
+
+    def set_weekly_zoom(factor, reset=False):
+        if reset:
+            weekly_scale[0] = 1.0
+        else:
+            weekly_scale[0] = max(0.6, min(4.0, round(weekly_scale[0] + factor, 2)))
+
+        weekly_zoom_label.value = f"{int(weekly_scale[0] * 100)}%"
+        new_w = int(750 * weekly_scale[0])
+        for c in weekly_containers:
+            c.width = new_w
+        page.update()
+
+    weekly_zoom_bar = ft.Container(
+        content=ft.Row(
+            [
+                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Button("➖", on_click=lambda e: set_weekly_zoom(-0.25)),
+                weekly_zoom_label,
+                ft.Button("➕", on_click=lambda e: set_weekly_zoom(0.25)),
+                ft.Button("↺ Reset", on_click=lambda e: set_weekly_zoom(0, reset=True)),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=8,
+        ),
+        bgcolor=BG_SURFACE_LIGHT,
+        padding=6,
+        border_radius=8,
+    )
 
     def display_week_group(year: int, week: int, media_type: str):
         content_display.controls.clear()
+        weekly_containers.clear()
+        weekly_scale[0] = 1.0
+        weekly_zoom_label.value = "100%"
+
         items = get_weekly_items()
         matching_pages = [
             i for i in items
@@ -70,8 +114,22 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
             status_label.value = f"Showing: {year} Week {week} {media_type}"
             for page_item in matching_pages:
                 if page_item["ext"] in ["png", "jpg", "jpeg", "webp"]:
+                    c = ft.Container(
+                        content=ft.Image(src=page_item["path"], fit="contain"),
+                        width=750,
+                    )
+                    weekly_containers.append(c)
+
+                    scrollable_row = ft.Row(
+                        controls=[c],
+                        scroll=ft.ScrollMode.ADAPTIVE,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    )
                     content_display.controls.append(
-                        ft.Image(src=page_item["path"], fit="contain", expand=True)
+                        ft.Card(
+                            content=ft.Container(content=scrollable_row, padding=10),
+                            margin=ft.Margin(0, 8, 0, 8),
+                        )
                     )
                 elif page_item["ext"] == "txt":
                     full_path = os.path.join(WEEKLY_DIR, page_item["filename"])
@@ -85,15 +143,15 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                         ft.Container(
                             content=ft.Text(text_content, size=15),
                             padding=15,
-                            bgcolor=ft.Colors.SURFACE_CONTAINER,
+                            bgcolor=BG_SURFACE_LIGHT,
                             border_radius=8,
                         )
                     )
         page.update()
 
-    dd_year = ft.Dropdown(label="Year", width=120)
-    dd_preview = ft.Dropdown(label="Past Previews", width=170)
-    dd_recap = ft.Dropdown(label="Past Recaps", width=170)
+    dd_year = ft.Dropdown(label="Year", width=110)
+    dd_preview = ft.Dropdown(label="Past Previews", width=160)
+    dd_recap = ft.Dropdown(label="Past Recaps", width=160)
 
     def on_selection_change(e):
         val = e.control.value
@@ -162,60 +220,77 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
     populate_controls()
 
-    return ft.ListView(
-        expand=True,
-        spacing=15,
-        padding=20,
+    fixed_top_header = ft.Column(
         controls=[
-            ft.Row(
-                controls=[dd_year, dd_preview, dd_recap],
-                alignment=ft.MainAxisAlignment.START,
-                wrap=True,
-            ),
+            ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=10),
             status_label,
-            ft.Divider(),
-            content_display,
+            weekly_zoom_bar,
+            ft.Divider(height=10),
         ],
+        spacing=8,
+    )
+
+    scrollable_viewer = ft.Column(
+        controls=[content_display],
+        scroll=ft.ScrollMode.ADAPTIVE,
+        expand=True,
+    )
+
+    return ft.Column(
+        controls=[fixed_top_header, scrollable_viewer],
+        expand=True,
+        spacing=5,
     )
 
 
 # ---------------------------------------------------------
-# TAB: HISTORY ARCHIVES
+# TAB: HISTORY ARCHIVES (FIXED TOOLBAR ZOOM VIEWER)
 # ---------------------------------------------------------
 def build_history_tab(page: ft.Page) -> ft.Control:
     history_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
-    # Modal zoom lightbox dialog
-    zoom_image = ft.Image(src="", fit="contain", expand=True)
-    zoom_dialog = ft.AlertDialog(
-        modal=True,
-        content=ft.Container(
-            content=zoom_image,
-            width=800,
-            height=600,
+    history_scale = [1.0]
+    history_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
+    history_containers = []
+
+    def set_history_zoom(factor, reset=False):
+        if reset:
+            history_scale[0] = 1.0
+        else:
+            history_scale[0] = max(0.6, min(4.0, round(history_scale[0] + factor, 2)))
+
+        history_zoom_label.value = f"{int(history_scale[0] * 100)}%"
+        new_w = int(750 * history_scale[0])
+        for c in history_containers:
+            c.width = new_w
+        page.update()
+
+    history_zoom_bar = ft.Container(
+        content=ft.Row(
+            [
+                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Button("➖", on_click=lambda e: set_history_zoom(-0.25)),
+                history_zoom_label,
+                ft.Button("➕", on_click=lambda e: set_history_zoom(0.25)),
+                ft.Button("↺ Reset", on_click=lambda e: set_history_zoom(0, reset=True)),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=8,
         ),
-        actions=[
-            ft.TextButton("Close", on_click=lambda e: close_lightbox()),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
+        bgcolor=BG_SURFACE_LIGHT,
+        padding=6,
+        border_radius=8,
     )
-
-    def open_lightbox(img_src):
-        zoom_image.src = img_src
-        zoom_dialog.open = True
-        page.dialog = zoom_dialog
-        page.update()
-
-    def close_lightbox():
-        zoom_dialog.open = False
-        page.update()
 
     def load_season_images(year):
         history_display.controls.clear()
-        found_images = []
+        history_containers.clear()
+        history_scale[0] = 1.0
+        history_zoom_label.value = "100%"
 
         search_dirs = [HISTORY_DIR, ASSETS_DIR]
         pattern = re.compile(rf"^{year}.*\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
+        found_images = []
 
         for d in search_dirs:
             if os.path.exists(d):
@@ -226,18 +301,26 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
         if found_images:
             for img_path in found_images:
-                # Wrap each image in a GestureDetector so it opens in the lightbox when tapped
-                img_card = ft.Container(
-                    content=ft.Image(src=img_path, fit="contain", expand=True),
-                    tooltip="Click or tap to zoom / view full size",
-                    ink=True,
-                    on_click=lambda e, p=img_path: open_lightbox(p),
-                    margin=10,
+                c = ft.Container(
+                    content=ft.Image(src=img_path, fit="contain"),
+                    width=750,
                 )
-                history_display.controls.append(img_card)
+                history_containers.append(c)
+
+                scrollable_row = ft.Row(
+                    controls=[c],
+                    scroll=ft.ScrollMode.ADAPTIVE,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                )
+                history_display.controls.append(
+                    ft.Card(
+                        content=ft.Container(content=scrollable_row, padding=10),
+                        margin=ft.Margin(0, 8, 0, 8),
+                    )
+                )
         else:
             history_display.controls.append(
-                ft.Text(f"No archive images uploaded for {year} yet.", italic=True, size=15)
+                ft.Text(f"No archive images found for season {year}.", italic=True, size=15)
             )
         page.update()
 
@@ -246,7 +329,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         label="Select Season",
         options=[create_option(y) for y in years],
         value="2025",
-        width=180,
+        width=150,
     )
 
     def on_year_select(e):
@@ -258,16 +341,26 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
     load_season_images("2025")
 
-    return ft.ListView(
-        expand=True,
-        spacing=15,
-        padding=20,
+    fixed_top_header = ft.Column(
         controls=[
-            ft.Text("Historical Season Archives", size=22, weight=ft.FontWeight.BOLD),
-            dd_history_year,
-            ft.Divider(),
-            history_display,
+            ft.Text("Historical Season Archives", size=20, weight=ft.FontWeight.BOLD),
+            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
+            history_zoom_bar,
+            ft.Divider(height=10),
         ],
+        spacing=8,
+    )
+
+    scrollable_viewer = ft.Column(
+        controls=[history_display],
+        scroll=ft.ScrollMode.ADAPTIVE,
+        expand=True,
+    )
+
+    return ft.Column(
+        controls=[fixed_top_header, scrollable_viewer],
+        expand=True,
+        spacing=5,
     )
 
 
@@ -305,7 +398,7 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
         value="1",
     )
     txt_prior_round = ft.TextField(label="Prior Draft Round (1-24)", value="10", width=190)
-    lbl_calc_result = ft.Text("2026 Draft Pick Cost: Round 10", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+    lbl_calc_result = ft.Text("2026 Draft Pick Cost: Round 10", size=20, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
 
     def calculate_cost(e=None):
         side = dd_side.value
@@ -361,10 +454,10 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
         validator_result.controls.clear()
         if violations:
             for err in violations:
-                validator_result.controls.append(ft.Text(err, color=ft.Colors.RED_400, size=15))
+                validator_result.controls.append(ft.Text(err, color=COLOR_RED, size=15))
         else:
             validator_result.controls.append(
-                ft.Text("✅ This sample keeper roster is 100% compliant with NPK rules!", color=ft.Colors.GREEN_400, size=15)
+                ft.Text("✅ This sample keeper roster is 100% compliant with NPK rules!", color=COLOR_GREEN, size=15)
             )
         page.update()
 
@@ -373,7 +466,7 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
     return ft.ListView(
         expand=True,
         spacing=15,
-        padding=20,
+        padding=15,
         controls=[
             ft.Text("Keeper Cost Calculator", size=22, weight=ft.FontWeight.BOLD),
             ft.Text("Calculate draft pick cost based on official NPK rules[cite: 3].", italic=True),
@@ -384,10 +477,10 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
             ft.Container(
                 content=lbl_calc_result,
                 padding=15,
-                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                bgcolor=BG_SURFACE_LIGHT,
                 border_radius=8,
             ),
-            ft.Divider(height=30),
+            ft.Divider(height=25),
             ft.Text("Team Keeper Roster Validator", size=20, weight=ft.FontWeight.BOLD),
             ft.Text("Checks max 4 keepers, offense/defense split, and Rounds 1-4 restrictions[cite: 4, 5].", italic=True),
             validator_result,
@@ -402,7 +495,7 @@ def build_rules_tab(page: ft.Page) -> ft.Control:
     return ft.ListView(
         expand=True,
         spacing=15,
-        padding=20,
+        padding=15,
         controls=[
             ft.Text("Official League Rules & Guidelines", size=22, weight=ft.FontWeight.BOLD),
             ft.Card(
@@ -410,7 +503,7 @@ def build_rules_tab(page: ft.Page) -> ft.Control:
                     padding=15,
                     content=ft.Column([
                         ft.Text("League Configuration", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text("• Format: 12-Team H2H, Snake Draft (24 Rounds)[cite: 3, 4]"),
+                        ft.Text("• Format: 12-Team H2H, Snake Draft (24 Rounds)[cite: 4]"),
                         ft.Text("• Buy-In: $100 entry fee[cite: 4]"),
                         ft.Text("• Keeper Deadline: Friday, August 21 (2:00 AM CDT)[cite: 3, 4]"),
                         ft.Text("• Draft Date: Saturday, August 29 (7:45 PM CDT)[cite: 3, 4]"),
@@ -447,57 +540,48 @@ def build_rules_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# MAIN APP ENTRY POINT (Weekly Hub -> History -> Calculator -> Rules)
+# MAIN APP ENTRY POINT (Pinned Header Navigation)
 # ---------------------------------------------------------
 def main(page: ft.Page):
     page.title = "NPK Fantasy Football League Dashboard"
     page.theme_mode = ft.ThemeMode.DARK
-    page.padding = 0
+    page.padding = 8
 
-    # Hook OneSignal Web Push SDK
-    page.scripts = [
-        "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js",
-        "/onesignal_init.js",
-    ]
-
-    page.appbar = ft.AppBar(
-        leading=ft.Image(src="/icons/icon-192.png", fit="contain"),
-        title=ft.Text("NPK Fantasy Football League"),
-        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
-    )
-
-    tab_views = [
+    views = [
         build_weekly_tab(page),
         build_history_tab(page),
         build_keeper_tab(page),
         build_rules_tab(page),
     ]
 
-    tabs = ft.Tabs(
-        length=4,
-        selected_index=0,
-        expand=True,
-        content=ft.Column(
-            expand=True,
-            controls=[
-                ft.TabBar(
-                    scrollable=True,
-                    tabs=[
-                        ft.Tab(label="Weekly Hub"),
-                        ft.Tab(label="History Archives"),
-                        ft.Tab(label="Keeper Calculator"),
-                        ft.Tab(label="Rules & Settings"),
-                    ],
-                ),
-                ft.TabBarView(
-                    expand=True,
-                    controls=tab_views,
-                ),
-            ],
-        ),
+    body = ft.Container(content=views[0], expand=True)
+
+    def switch_tab(idx):
+        body.content = views[idx]
+        page.update()
+
+    nav_row = ft.Row(
+        controls=[
+            ft.Button("Weekly Hub", on_click=lambda e: switch_tab(0)),
+            ft.Button("History Archives", on_click=lambda e: switch_tab(1)),
+            ft.Button("Keeper Calculator", on_click=lambda e: switch_tab(2)),
+            ft.Button("Rules & Settings", on_click=lambda e: switch_tab(3)),
+        ],
+        scroll=ft.ScrollMode.ADAPTIVE,
+        alignment=ft.MainAxisAlignment.CENTER,
     )
 
-    page.add(tabs)
+    page.add(
+        ft.Column(
+            controls=[
+                nav_row,
+                ft.Divider(height=10),
+                body,
+            ],
+            expand=True,
+            spacing=5,
+        )
+    )
 
 
 # ---------------------------------------------------------
