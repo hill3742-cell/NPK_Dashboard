@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from keeper_rules import calculate_keeper_cost, validate_keeper_selections
 
-st.set_page_config(page_title="No Pain Keeper", page_icon="app_icon.png", layout="wide")
+st.set_page_config(page_title="NPK FF League", page_icon="🏈", layout="wide")
 st.title("🏈 NPK Fantasy Football League Dashboard")
 st.caption("League ID: 31198 | 12 Teams | 24 Draft Rounds")
 
