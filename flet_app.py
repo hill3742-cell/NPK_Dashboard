@@ -185,6 +185,31 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 def build_history_tab(page: ft.Page) -> ft.Control:
     history_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
+    # Modal zoom lightbox dialog
+    zoom_image = ft.Image(src="", fit="contain", expand=True)
+    zoom_dialog = ft.AlertDialog(
+        modal=True,
+        content=ft.Container(
+            content=zoom_image,
+            width=800,
+            height=600,
+        ),
+        actions=[
+            ft.TextButton("Close", on_click=lambda e: close_lightbox()),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+
+    def open_lightbox(img_src):
+        zoom_image.src = img_src
+        zoom_dialog.open = True
+        page.dialog = zoom_dialog
+        page.update()
+
+    def close_lightbox():
+        zoom_dialog.open = False
+        page.update()
+
     def load_season_images(year):
         history_display.controls.clear()
         found_images = []
@@ -201,9 +226,15 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
         if found_images:
             for img_path in found_images:
-                history_display.controls.append(
-                    ft.Image(src=img_path, fit="contain", expand=True)
+                # Wrap each image in a GestureDetector so it opens in the lightbox when tapped
+                img_card = ft.Container(
+                    content=ft.Image(src=img_path, fit="contain", expand=True),
+                    tooltip="Click or tap to zoom / view full size",
+                    ink=True,
+                    on_click=lambda e, p=img_path: open_lightbox(p),
+                    margin=10,
                 )
+                history_display.controls.append(img_card)
         else:
             history_display.controls.append(
                 ft.Text(f"No archive images uploaded for {year} yet.", italic=True, size=15)
