@@ -16,7 +16,7 @@ os.makedirs(HISTORY_DIR, exist_ok=True)
 
 
 def create_option(key: str, text: str = None):
-    """Maintains dropdown option compatibility across Flet releases."""
+    """Maintains dropdown option compatibility across Flet versions."""
     label = text if text is not None else str(key)
     if hasattr(ft, "DropdownOption"):
         return ft.DropdownOption(key=str(key), text=label)
@@ -263,12 +263,13 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 # TAB 4: WEEKLY HUB (PREVIEWS & RECAPS)
 # ---------------------------------------------------------
 def get_weekly_items():
-    """Scans assets/weekly for files matching: YYYY_W{num}_(preview|recap).ext"""
+    """Scans assets/weekly for files matching: YYYY_W{num}_(preview|recap)[_p{num}].ext"""
     items = []
-    pattern = re.compile(r"^(\d{4})_W(?:eek)?_?(\d+)_?(preview|recap)\.(png|jpg|jpeg|webp|txt)$", re.IGNORECASE)
+    # Updated regex pattern to capture single files and multi-page (_p1, _p2) PDF exports
+    pattern = re.compile(r"^(\d{4})_W(?:eek)?_?(\d+)_?(preview|recap)(?:_p\d+)?\.(png|jpg|jpeg|webp|txt)$", re.IGNORECASE)
 
     if os.path.exists(WEEKLY_DIR):
-        for fname in os.listdir(WEEKLY_DIR):
+        for fname in sorted(os.listdir(WEEKLY_DIR)):
             match = pattern.match(fname)
             if match:
                 year, week, media_type, ext = match.groups()
@@ -288,33 +289,40 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
     content_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
     status_label = ft.Text("", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_300)
 
-    def display_item(item):
+    def display_week_group(year: int, week: int, media_type: str):
         content_display.controls.clear()
-        if not item:
-            status_label.value = "No Previews or Recaps found for this season."
+        items = get_weekly_items()
+        matching_pages = [
+            i for i in items 
+            if i["year"] == year and i["week"] == week and i["type"] == media_type
+        ]
+
+        if not matching_pages:
+            status_label.value = "No Previews or Recaps found for this selection."
             content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
         else:
-            status_label.value = f"Showing: {item['year']} Week {item['week']} {item['type']}"
-            if item["ext"] in ["png", "jpg", "jpeg", "webp"]:
-                content_display.controls.append(
-                    ft.Image(src=item["path"], fit="contain", expand=True)
-                )
-            elif item["ext"] == "txt":
-                full_path = os.path.join(WEEKLY_DIR, item["filename"])
-                try:
-                    with open(full_path, "r", encoding="utf-8") as f:
-                        text_content = f.read()
-                except Exception:
-                    text_content = "Could not read text file."
-
-                content_display.controls.append(
-                    ft.Container(
-                        content=ft.Text(text_content, size=15),
-                        padding=15,
-                        bgcolor=ft.Colors.SURFACE_CONTAINER,
-                        border_radius=8,
+            status_label.value = f"Showing: {year} Week {week} {media_type}"
+            for page_item in matching_pages:
+                if page_item["ext"] in ["png", "jpg", "jpeg", "webp"]:
+                    content_display.controls.append(
+                        ft.Image(src=page_item["path"], fit="contain", expand=True)
                     )
-                )
+                elif page_item["ext"] == "txt":
+                    full_path = os.path.join(WEEKLY_DIR, page_item["filename"])
+                    try:
+                        with open(full_path, "r", encoding="utf-8") as f:
+                            text_content = f.read()
+                    except Exception:
+                        text_content = "Could not read text file."
+
+                    content_display.controls.append(
+                        ft.Container(
+                            content=ft.Text(text_content, size=15),
+                            padding=15,
+                            bgcolor=ft.Colors.SURFACE_CONTAINER,
+                            border_radius=8,
+                        )
+                    )
         page.update()
 
     dd_year = ft.Dropdown(label="Year", width=120)
@@ -322,15 +330,18 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
     dd_recap = ft.Dropdown(label="Past Recaps", width=170)
 
     def on_selection_change(e):
-        items = get_weekly_items()
-        selected_file = e.control.value
-        match = next((i for i in items if i["filename"] == selected_file), None)
-        if match:
-            if e.control == dd_preview:
-                dd_recap.value = None
-            else:
-                dd_preview.value = None
-            display_item(match)
+        val = e.control.value
+        if not val:
+            return
+        parts = val.split("_")
+        sel_year, sel_week, sel_type = int(parts[0]), int(parts[1]), parts[2]
+        
+        if e.control == dd_preview:
+            dd_recap.value = None
+        else:
+            dd_preview.value = None
+
+        display_week_group(sel_year, sel_week, sel_type)
 
     def populate_controls(selected_year=None):
         items = get_weekly_items()
@@ -346,23 +357,30 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
         year_items = [i for i in items if i["year"] == target_year]
 
-        previews = sorted([i for i in year_items if i["type"] == "Preview"], key=lambda x: x["week"], reverse=True)
-        dd_preview.options = [create_option(p["filename"], f"Week {p['week']} Preview") for p in previews]
+        # Group distinct weeks for Previews
+        preview_weeks = sorted(list(set(i["week"] for i in year_items if i["type"] == "Preview")), reverse=True)
+        dd_preview.options = [create_option(f"{target_year}_{w}_Preview", f"Week {w} Preview") for w in preview_weeks]
         dd_preview.value = None
 
-        recaps = sorted([i for i in year_items if i["type"] == "Recap"], key=lambda x: x["week"], reverse=True)
-        dd_recap.options = [create_option(r["filename"], f"Week {r['week']} Recap") for r in recaps]
+        # Group distinct weeks for Recaps
+        recap_weeks = sorted(list(set(i["week"] for i in year_items if i["type"] == "Recap")), reverse=True)
+        dd_recap.options = [create_option(f"{target_year}_{w}_Recap", f"Week {w} Recap") for w in recap_weeks]
         dd_recap.value = None
 
+        # Priority selection: highest week number, Recap beats Preview on tie
         if year_items:
             latest = max(year_items, key=lambda x: x["priority"])
+            key_val = f"{latest['year']}_{latest['week']}_{latest['type']}"
             if latest["type"] == "Preview":
-                dd_preview.value = latest["filename"]
+                dd_preview.value = key_val
             else:
-                dd_recap.value = latest["filename"]
-            display_item(latest)
+                dd_recap.value = key_val
+            display_week_group(latest["year"], latest["week"], latest["type"])
         else:
-            display_item(None)
+            status_label.value = "No Previews or Recaps found for this season."
+            content_display.controls.clear()
+            content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
+            page.update()
 
     def on_year_change(e):
         populate_controls(int(dd_year.value))
@@ -405,6 +423,12 @@ def main(page: ft.Page):
     page.title = "NPK Fantasy Football League Dashboard"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 0
+
+    # Hook OneSignal Web Push SDK
+    page.scripts = [
+        "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js",
+        "/onesignal_init.js",
+    ]
 
     page.appbar = ft.AppBar(
         leading=ft.Image(src="/icons/icon-192.png", fit="contain"),
