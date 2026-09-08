@@ -31,7 +31,7 @@ def create_option(key: str, text: str = None):
 
 
 # ---------------------------------------------------------
-# TAB: WEEKLY HUB (PREVIEWS & RECAPS WITH ZOOM)
+# TAB: WEEKLY HUB (PINCH ZOOM & AUTO-COLLAPSIBLE CONTROLS)
 # ---------------------------------------------------------
 def get_weekly_items():
     """Scans assets/weekly for files matching: YYYY_W{num}_(preview|recap)[_p{num}].ext"""
@@ -60,7 +60,7 @@ def get_weekly_items():
 
 def build_weekly_tab(page: ft.Page) -> ft.Control:
     content_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    status_label = ft.Text("", size=15, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
+    status_label = ft.Text("", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
 
     weekly_scale = [1.0]
     weekly_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
@@ -74,14 +74,16 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
         weekly_zoom_label.value = f"{int(weekly_scale[0] * 100)}%"
         new_w = int(750 * weekly_scale[0])
+        new_h = int(680 * weekly_scale[0])
         for c in weekly_containers:
             c.width = new_w
+            c.height = new_h
         page.update()
 
     weekly_zoom_bar = ft.Container(
         content=ft.Row(
             [
-                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=13),
                 ft.Button("➖", on_click=lambda e: set_weekly_zoom(-0.25)),
                 weekly_zoom_label,
                 ft.Button("➕", on_click=lambda e: set_weekly_zoom(0.25)),
@@ -95,11 +97,51 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         border_radius=8,
     )
 
-    def display_week_group(year: int, week: int, media_type: str):
+    dd_year = ft.Dropdown(label="Year", width=105)
+    dd_preview = ft.Dropdown(label="Past Previews", width=155)
+    dd_recap = ft.Dropdown(label="Past Recaps", width=155)
+
+    # Collapsible container holding dropdowns and zoom controls
+    controls_box = ft.Column(
+        controls=[
+            ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=8),
+            weekly_zoom_bar,
+        ],
+        spacing=8,
+        visible=False,  # Starts collapsed to give maximum room to document
+    )
+
+    def toggle_controls(e=None):
+        controls_box.visible = not controls_box.visible
+        btn_toggle.text = "Hide Controls ▲" if controls_box.visible else "Select / Zoom ▼"
+        page.update()
+
+    btn_toggle = ft.TextButton(
+        "Select / Zoom ▼",
+        icon=ft.Icons.TUNE,
+        on_click=toggle_controls,
+    )
+
+    header_bar = ft.Container(
+        content=ft.Row(
+            [status_label, btn_toggle],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        bgcolor=BG_SURFACE_LIGHT,
+        padding=8,
+        border_radius=8,
+    )
+
+    def display_week_group(year: int, week: int, media_type: str, auto_collapse: bool = True):
         content_display.controls.clear()
         weekly_containers.clear()
         weekly_scale[0] = 1.0
         weekly_zoom_label.value = "100%"
+
+        if auto_collapse:
+            controls_box.visible = False
+            btn_toggle.text = "Select / Zoom ▼"
 
         items = get_weekly_items()
         matching_pages = [
@@ -108,15 +150,22 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         ]
 
         if not matching_pages:
-            status_label.value = "No Previews or Recaps found for this selection."
+            status_label.value = "No Previews or Recaps found."
             content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
         else:
-            status_label.value = f"Showing: {year} Week {week} {media_type}"
+            status_label.value = f"Showing: {year} W{week} {media_type}"
             for page_item in matching_pages:
                 if page_item["ext"] in ["png", "jpg", "jpeg", "webp"]:
-                    c = ft.Container(
+                    # InteractiveViewer enables native 2-finger pinch and drag panning
+                    viewer = ft.InteractiveViewer(
                         content=ft.Image(src=page_item["path"], fit="contain"),
+                        min_scale=1.0,
+                        max_scale=4.0,
+                    )
+                    c = ft.Container(
+                        content=viewer,
                         width=750,
+                        height=680,
                     )
                     weekly_containers.append(c)
 
@@ -127,8 +176,8 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                     )
                     content_display.controls.append(
                         ft.Card(
-                            content=ft.Container(content=scrollable_row, padding=10),
-                            margin=ft.Margin(0, 8, 0, 8),
+                            content=ft.Container(content=scrollable_row, padding=6),
+                            margin=ft.Margin(0, 4, 0, 8),
                         )
                     )
                 elif page_item["ext"] == "txt":
@@ -149,10 +198,6 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                     )
         page.update()
 
-    dd_year = ft.Dropdown(label="Year", width=110)
-    dd_preview = ft.Dropdown(label="Past Previews", width=160)
-    dd_recap = ft.Dropdown(label="Past Recaps", width=160)
-
     def on_selection_change(e):
         val = e.control.value
         if not val:
@@ -165,7 +210,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         else:
             dd_preview.value = None
 
-        display_week_group(sel_year, sel_week, sel_type)
+        display_week_group(sel_year, sel_week, sel_type, auto_collapse=True)
 
     def populate_controls(selected_year=None):
         items = get_weekly_items()
@@ -196,9 +241,9 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                 dd_preview.value = key_val
             else:
                 dd_recap.value = key_val
-            display_week_group(latest["year"], latest["week"], latest["type"])
+            display_week_group(latest["year"], latest["week"], latest["type"], auto_collapse=True)
         else:
-            status_label.value = "No Previews or Recaps found for this season."
+            status_label.value = "No Previews or Recaps found."
             content_display.controls.clear()
             content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
             page.update()
@@ -222,12 +267,11 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
     fixed_top_header = ft.Column(
         controls=[
-            ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=10),
-            status_label,
-            weekly_zoom_bar,
-            ft.Divider(height=10),
+            header_bar,
+            controls_box,
+            ft.Divider(height=6),
         ],
-        spacing=8,
+        spacing=6,
     )
 
     scrollable_viewer = ft.Column(
@@ -239,15 +283,16 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
     return ft.Column(
         controls=[fixed_top_header, scrollable_viewer],
         expand=True,
-        spacing=5,
+        spacing=4,
     )
 
 
 # ---------------------------------------------------------
-# TAB: HISTORY ARCHIVES (FIXED TOOLBAR ZOOM VIEWER)
+# TAB: HISTORY ARCHIVES (PINCH ZOOM & AUTO-COLLAPSIBLE)
 # ---------------------------------------------------------
 def build_history_tab(page: ft.Page) -> ft.Control:
     history_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+    history_status = ft.Text("Showing Season: 2025", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
 
     history_scale = [1.0]
     history_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
@@ -261,14 +306,16 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
         history_zoom_label.value = f"{int(history_scale[0] * 100)}%"
         new_w = int(750 * history_scale[0])
+        new_h = int(680 * history_scale[0])
         for c in history_containers:
             c.width = new_w
+            c.height = new_h
         page.update()
 
     history_zoom_bar = ft.Container(
         content=ft.Row(
             [
-                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=13),
                 ft.Button("➖", on_click=lambda e: set_history_zoom(-0.25)),
                 history_zoom_label,
                 ft.Button("➕", on_click=lambda e: set_history_zoom(0.25)),
@@ -282,11 +329,55 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         border_radius=8,
     )
 
-    def load_season_images(year):
+    years = [str(y) for y in range(2025, 2010, -1)]
+    dd_history_year = ft.Dropdown(
+        label="Select Season",
+        options=[create_option(y) for y in years],
+        value="2025",
+        width=150,
+    )
+
+    history_controls_box = ft.Column(
+        controls=[
+            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
+            history_zoom_bar,
+        ],
+        spacing=8,
+        visible=False,
+    )
+
+    def toggle_history_controls(e=None):
+        history_controls_box.visible = not history_controls_box.visible
+        btn_hist_toggle.text = "Hide Controls ▲" if history_controls_box.visible else "Season / Zoom ▼"
+        page.update()
+
+    btn_hist_toggle = ft.TextButton(
+        "Season / Zoom ▼",
+        icon=ft.Icons.TUNE,
+        on_click=toggle_history_controls,
+    )
+
+    history_header_bar = ft.Container(
+        content=ft.Row(
+            [history_status, btn_hist_toggle],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        bgcolor=BG_SURFACE_LIGHT,
+        padding=8,
+        border_radius=8,
+    )
+
+    def load_season_images(year, auto_collapse: bool = True):
         history_display.controls.clear()
         history_containers.clear()
         history_scale[0] = 1.0
         history_zoom_label.value = "100%"
+        history_status.value = f"Showing Season: {year}"
+
+        if auto_collapse:
+            history_controls_box.visible = False
+            btn_hist_toggle.text = "Season / Zoom ▼"
 
         search_dirs = [HISTORY_DIR, ASSETS_DIR]
         pattern = re.compile(rf"^{year}.*\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
@@ -301,9 +392,15 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
         if found_images:
             for img_path in found_images:
-                c = ft.Container(
+                viewer = ft.InteractiveViewer(
                     content=ft.Image(src=img_path, fit="contain"),
+                    min_scale=1.0,
+                    max_scale=4.0,
+                )
+                c = ft.Container(
+                    content=viewer,
                     width=750,
+                    height=680,
                 )
                 history_containers.append(c)
 
@@ -314,8 +411,8 @@ def build_history_tab(page: ft.Page) -> ft.Control:
                 )
                 history_display.controls.append(
                     ft.Card(
-                        content=ft.Container(content=scrollable_row, padding=10),
-                        margin=ft.Margin(0, 8, 0, 8),
+                        content=ft.Container(content=scrollable_row, padding=6),
+                        margin=ft.Margin(0, 4, 0, 8),
                     )
                 )
         else:
@@ -324,31 +421,22 @@ def build_history_tab(page: ft.Page) -> ft.Control:
             )
         page.update()
 
-    years = [str(y) for y in range(2025, 2010, -1)]
-    dd_history_year = ft.Dropdown(
-        label="Select Season",
-        options=[create_option(y) for y in years],
-        value="2025",
-        width=150,
-    )
-
     def on_year_select(e):
-        load_season_images(dd_history_year.value)
+        load_season_images(dd_history_year.value, auto_collapse=True)
 
     dd_history_year.on_change = on_year_select
     if hasattr(dd_history_year, "on_select"):
         dd_history_year.on_select = on_year_select
 
-    load_season_images("2025")
+    load_season_images("2025", auto_collapse=True)
 
     fixed_top_header = ft.Column(
         controls=[
-            ft.Text("Historical Season Archives", size=20, weight=ft.FontWeight.BOLD),
-            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
-            history_zoom_bar,
-            ft.Divider(height=10),
+            history_header_bar,
+            history_controls_box,
+            ft.Divider(height=6),
         ],
-        spacing=8,
+        spacing=6,
     )
 
     scrollable_viewer = ft.Column(
@@ -360,7 +448,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
     return ft.Column(
         controls=[fixed_top_header, scrollable_viewer],
         expand=True,
-        spacing=5,
+        spacing=4,
     )
 
 
@@ -469,7 +557,7 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
         padding=15,
         controls=[
             ft.Text("Keeper Cost Calculator", size=22, weight=ft.FontWeight.BOLD),
-            ft.Text("Calculate draft pick cost based on official NPK rules[cite: 3].", italic=True),
+            ft.Text("Calculate draft pick cost based on official NPK rules.", italic=True),
             ft.Row([txt_player, dd_side], wrap=True),
             ft.Row([dd_year, txt_prior_round], wrap=True),
             chk_undrafted,
@@ -482,7 +570,7 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
             ),
             ft.Divider(height=25),
             ft.Text("Team Keeper Roster Validator", size=20, weight=ft.FontWeight.BOLD),
-            ft.Text("Checks max 4 keepers, offense/defense split, and Rounds 1-4 restrictions[cite: 4, 5].", italic=True),
+            ft.Text("Checks max 4 keepers, offense/defense split, and Rounds 1-4 restrictions.", italic=True),
             validator_result,
         ],
     )
@@ -503,11 +591,11 @@ def build_rules_tab(page: ft.Page) -> ft.Control:
                     padding=15,
                     content=ft.Column([
                         ft.Text("League Configuration", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text("• Format: 12-Team H2H, Snake Draft (24 Rounds)[cite: 4]"),
-                        ft.Text("• Buy-In: $100 entry fee[cite: 4]"),
-                        ft.Text("• Keeper Deadline: Friday, August 21 (2:00 AM CDT)[cite: 3, 4]"),
-                        ft.Text("• Draft Date: Saturday, August 29 (7:45 PM CDT)[cite: 3, 4]"),
-                        ft.Text("• Waivers: FAAB bidding[cite: 3, 5]"),
+                        ft.Text("• Format: 12-Team H2H, Snake Draft (24 Rounds)"),
+                        ft.Text("• Buy-In: $100 entry fee"),
+                        ft.Text("• Keeper Deadline: Friday, August 21 (2:00 AM CDT)"),
+                        ft.Text("• Draft Date: Saturday, August 29 (7:45 PM CDT)"),
+                        ft.Text("• Waivers: FAAB bidding"),
                     ], spacing=6),
                 )
             ),
@@ -516,9 +604,9 @@ def build_rules_tab(page: ft.Page) -> ft.Control:
                     padding=15,
                     content=ft.Column([
                         ft.Text("Roster & Position Constraints", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text("• Roster Size: 24 Total (15 Starters, 9 Bench)[cite: 3, 4]"),
-                        ft.Text("• Bench Constraint: Max 6 per side of ball (Offense, Defense, or ST)[cite: 3, 4]"),
-                        ft.Text("• IR Slots: 2 total (Max 1 Offense, 1 Defense)[cite: 3, 4]"),
+                        ft.Text("• Roster Size: 24 Total (15 Starters, 9 Bench)"),
+                        ft.Text("• Bench Constraint: Max 6 per side of ball (Offense, Defense, or ST)"),
+                        ft.Text("• IR Slots: 2 total (Max 1 Offense, 1 Defense)"),
                     ], spacing=6),
                 )
             ),
@@ -527,11 +615,11 @@ def build_rules_tab(page: ft.Page) -> ft.Control:
                     padding=15,
                     content=ft.Column([
                         ft.Text("Keeper Roster Limits", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text("• Total Keepers: Up to 4 players[cite: 4]"),
-                        ft.Text("• 2 Keepers: Max 1 Offense, Max 1 Defense/ST[cite: 4, 5]"),
-                        ft.Text("• 3 or 4 Keepers: Max 2 Offense, Max 2 Defense/ST[cite: 4, 5]"),
-                        ft.Text("• Rounds 1–4 Rule: Only 1 player allowed in rounds 1 through 4[cite: 3, 4, 5]"),
-                        ft.Text("• Undrafted Free Agents: 13th / 12th round (Offense), 20th / 19th round (Defense)[cite: 4, 5]"),
+                        ft.Text("• Total Keepers: Up to 4 players"),
+                        ft.Text("• 2 Keepers: Max 1 Offense, Max 1 Defense/ST"),
+                        ft.Text("• 3 or 4 Keepers: Max 2 Offense, Max 2 Defense/ST"),
+                        ft.Text("• Rounds 1–4 Rule: Only 1 player allowed in rounds 1 through 4"),
+                        ft.Text("• Undrafted Free Agents: 13th / 12th round (Offense), 20th / 19th round (Defense)"),
                     ], spacing=6),
                 )
             ),
@@ -575,11 +663,11 @@ def main(page: ft.Page):
         ft.Column(
             controls=[
                 nav_row,
-                ft.Divider(height=10),
+                ft.Divider(height=8),
                 body,
             ],
             expand=True,
-            spacing=5,
+            spacing=4,
         )
     )
 
