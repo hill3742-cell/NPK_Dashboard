@@ -31,7 +31,7 @@ def create_option(key: str, text: str = None):
 
 
 # ---------------------------------------------------------
-# TAB 1: WEEKLY HUB (PREVIEWS & RECAPS WITH ZOOM)
+# TAB 1: WEEKLY HUB (PREVIEWS & RECAPS WITH PINCH-TO-ZOOM)
 # ---------------------------------------------------------
 def get_weekly_items():
     """Scans assets/weekly for files matching: YYYY_W{num}_(preview|recap)[_p{num}].ext"""
@@ -81,19 +81,47 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
     weekly_zoom_bar = ft.Container(
         content=ft.Row(
             [
-                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Text("Zoom / Pinch:", weight=ft.FontWeight.BOLD, size=13),
                 ft.Button("➖", on_click=lambda e: set_weekly_zoom(-0.25)),
                 weekly_zoom_label,
                 ft.Button("➕", on_click=lambda e: set_weekly_zoom(0.25)),
                 ft.Button("↺ Reset", on_click=lambda e: set_weekly_zoom(0, reset=True)),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
-            spacing=8,
+            spacing=6,
         ),
         bgcolor=BG_SURFACE_LIGHT,
         padding=6,
         border_radius=8,
     )
+
+    # Collapsible Top Controls Toolbar for Weekly Hub
+    weekly_controls_column = ft.Column(
+        controls=[
+            ft.Text("", size=1),  # populated dynamically
+            status_label,
+            weekly_zoom_bar,
+        ],
+        spacing=8,
+        visible=True,
+    )
+
+    btn_toggle_controls = ft.TextButton(
+        "▲ Hide Controls / Fullscreen",
+        icon=ft.Icons.KEYBOARD_ARROW_UP,
+    )
+
+    def toggle_weekly_controls(e):
+        weekly_controls_column.visible = not weekly_controls_column.visible
+        if weekly_controls_column.visible:
+            btn_toggle_controls.text = "▲ Hide Controls / Fullscreen"
+            btn_toggle_controls.icon = ft.Icons.KEYBOARD_ARROW_UP
+        else:
+            btn_toggle_controls.text = "▼ Show Controls & Zoom Bar"
+            btn_toggle_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
+        page.update()
+
+    btn_toggle_controls.on_click = toggle_weekly_controls
 
     def display_week_group(year: int, week: int, media_type: str):
         content_display.controls.clear()
@@ -114,8 +142,16 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
             status_label.value = f"Showing: {year} Week {week} {media_type}"
             for page_item in matching_pages:
                 if page_item["ext"] in ["png", "jpg", "jpeg", "webp"]:
-                    c = ft.Container(
+                    # Native Flutter InteractiveViewer for mobile multi-touch pinch-to-zoom & pan
+                    pinch_viewer = ft.InteractiveViewer(
                         content=ft.Image(src=page_item["path"], fit="contain"),
+                        min_scale=0.8,
+                        max_scale=4.5,
+                        pan_enabled=True,
+                        scale_enabled=True,
+                    )
+                    c = ft.Container(
+                        content=pinch_viewer,
                         width=750,
                     )
                     weekly_containers.append(c)
@@ -127,8 +163,8 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                     )
                     content_display.controls.append(
                         ft.Card(
-                            content=ft.Container(content=scrollable_row, padding=10),
-                            margin=ft.Margin(0, 8, 0, 8),
+                            content=ft.Container(content=scrollable_row, padding=6),
+                            margin=ft.Margin(0, 6, 0, 6),
                         )
                     )
                 elif page_item["ext"] == "txt":
@@ -152,6 +188,8 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
     dd_year = ft.Dropdown(label="Year", width=110)
     dd_preview = ft.Dropdown(label="Past Previews", width=160)
     dd_recap = ft.Dropdown(label="Past Recaps", width=160)
+
+    weekly_controls_column.controls[0] = ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=10)
 
     def on_selection_change(e):
         val = e.control.value
@@ -222,12 +260,11 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
     fixed_top_header = ft.Column(
         controls=[
-            ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=10),
-            status_label,
-            weekly_zoom_bar,
+            ft.Row([btn_toggle_controls], alignment=ft.MainAxisAlignment.END),
+            weekly_controls_column,
             ft.Divider(height=10),
         ],
-        spacing=8,
+        spacing=4,
     )
 
     scrollable_viewer = ft.Column(
@@ -244,7 +281,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# TAB 2: HISTORY ARCHIVES (FIXED TOOLBAR ZOOM VIEWER)
+# TAB 2: HISTORY ARCHIVES (PINCH-TO-ZOOM & COLLAPSIBLE HEADER)
 # ---------------------------------------------------------
 def build_history_tab(page: ft.Page) -> ft.Control:
     history_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
@@ -268,19 +305,54 @@ def build_history_tab(page: ft.Page) -> ft.Control:
     history_zoom_bar = ft.Container(
         content=ft.Row(
             [
-                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
+                ft.Text("Zoom / Pinch:", weight=ft.FontWeight.BOLD, size=13),
                 ft.Button("➖", on_click=lambda e: set_history_zoom(-0.25)),
                 history_zoom_label,
                 ft.Button("➕", on_click=lambda e: set_history_zoom(0.25)),
                 ft.Button("↺ Reset", on_click=lambda e: set_history_zoom(0, reset=True)),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
-            spacing=8,
+            spacing=6,
         ),
         bgcolor=BG_SURFACE_LIGHT,
         padding=6,
         border_radius=8,
     )
+
+    years = [str(y) for y in range(2025, 2010, -1)]
+    dd_history_year = ft.Dropdown(
+        label="Select Season",
+        options=[create_option(y) for y in years],
+        value="2025",
+        width=150,
+    )
+
+    history_controls_column = ft.Column(
+        controls=[
+            ft.Text("Historical Season Archives", size=18, weight=ft.FontWeight.BOLD),
+            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
+            history_zoom_bar,
+        ],
+        spacing=6,
+        visible=True,
+    )
+
+    btn_toggle_history_controls = ft.TextButton(
+        "▲ Hide Controls / Fullscreen",
+        icon=ft.Icons.KEYBOARD_ARROW_UP,
+    )
+
+    def toggle_history_controls(e):
+        history_controls_column.visible = not history_controls_column.visible
+        if history_controls_column.visible:
+            btn_toggle_history_controls.text = "▲ Hide Controls / Fullscreen"
+            btn_toggle_history_controls.icon = ft.Icons.KEYBOARD_ARROW_UP
+        else:
+            btn_toggle_history_controls.text = "▼ Show Controls & Zoom Bar"
+            btn_toggle_history_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
+        page.update()
+
+    btn_toggle_history_controls.on_click = toggle_history_controls
 
     def load_season_images(year):
         history_display.controls.clear()
@@ -301,8 +373,15 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
         if found_images:
             for img_path in found_images:
-                c = ft.Container(
+                pinch_viewer = ft.InteractiveViewer(
                     content=ft.Image(src=img_path, fit="contain"),
+                    min_scale=0.8,
+                    max_scale=4.5,
+                    pan_enabled=True,
+                    scale_enabled=True,
+                )
+                c = ft.Container(
+                    content=pinch_viewer,
                     width=750,
                 )
                 history_containers.append(c)
@@ -314,8 +393,8 @@ def build_history_tab(page: ft.Page) -> ft.Control:
                 )
                 history_display.controls.append(
                     ft.Card(
-                        content=ft.Container(content=scrollable_row, padding=10),
-                        margin=ft.Margin(0, 8, 0, 8),
+                        content=ft.Container(content=scrollable_row, padding=6),
+                        margin=ft.Margin(0, 6, 0, 6),
                     )
                 )
         else:
@@ -323,14 +402,6 @@ def build_history_tab(page: ft.Page) -> ft.Control:
                 ft.Text(f"No archive images found for season {year}.", italic=True, size=15)
             )
         page.update()
-
-    years = [str(y) for y in range(2025, 2010, -1)]
-    dd_history_year = ft.Dropdown(
-        label="Select Season",
-        options=[create_option(y) for y in years],
-        value="2025",
-        width=150,
-    )
 
     def on_year_select(e):
         load_season_images(dd_history_year.value)
@@ -343,12 +414,11 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
     fixed_top_header = ft.Column(
         controls=[
-            ft.Text("Historical Season Archives", size=20, weight=ft.FontWeight.BOLD),
-            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
-            history_zoom_bar,
+            ft.Row([btn_toggle_history_controls], alignment=ft.MainAxisAlignment.END),
+            history_controls_column,
             ft.Divider(height=10),
         ],
-        spacing=8,
+        spacing=4,
     )
 
     scrollable_viewer = ft.Column(
@@ -492,7 +562,6 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
 # EXCEL PAYOUT READER (2026 Fantasy Football Payouts.xlsm)
 # ---------------------------------------------------------
 def load_payouts_from_excel():
-    """Dynamically reads the Payout tab from 2026 Fantasy Football Payouts.xlsm."""
     possible_names = [
         "2026 Fantasy Football Payouts.xlsm",
         "2026 Fantasy Football Payouts.xlsx",
@@ -717,7 +786,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ),
         ]
 
-    # 3. COMPLETE KNOWLEDGE BASE (SETUP, SCORING, KEEPERS, FINANCES, DRAFT, BENCH, TRADES, POSTSEASON, PAYOUTS)
+    # 3. KNOWLEDGE BASE ARTICLES (STRICT CATEGORY GROUPING)
     articles = [
         # --- 1. LEAGUE SETUP ---
         {
@@ -767,7 +836,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ],
         },
 
-        # --- 2. POSITION SCORING (OFFENSE, KICKING, DEFENSE) ---
+        # --- 2. POSITION SCORING (INDIVIDUAL POSITIONS FIRST) ---
         {
             "category": "Scoring",
             "title": "Quarterback (QB) Scoring",
@@ -872,14 +941,14 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ],
         },
 
-        # --- CUMULATIVE & STACKING SCORING (AFTER INDIVIDUAL POSITIONS) ---
+        # --- 2B. CUMULATIVE & STACKING SCORING (PLACED AFTER INDIVIDUAL POSITIONS) ---
         {
             "category": "Scoring",
             "title": "Cumulative & Stacking Points (Sacks, Big Plays & 40+ Bonuses)",
             "keywords": "scoring cumulative stacking stack sack sacks tfl tackle for loss solo tackle bonus 40 yard pick-six strip sack add on add-on",
             "controls": [
                 ft.Text("How Cumulative (Add-On) Scoring Works in NPK", size=17, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
-                ft.Text("In Yahoo Fantasy IDP and NPK scoring rules, statistical events on a single play stack cumulatively. A sack is not an isolated event; it is officially recorded as an unassisted tackle of a quarterback behind the line of scrimmage."),
+                ft.Text("In Yahoo Fantasy IDP and NPK rules, statistical events on a single play stack cumulatively. A sack is not an isolated event; it is officially recorded as an unassisted tackle of a quarterback behind the line of scrimmage."),
                 ft.Divider(height=10),
                 ft.Text("The Solo Sack Breakdown (3.5 Points Total):", weight=ft.FontWeight.BOLD),
                 ft.Text("• Solo Tackle: +1.5 pts (bringing down the ball carrier)"),
@@ -928,8 +997,8 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Maximum Keepers: Teams may keep up to 4 players (0, 1, 2, 3, or 4)."),
                 ft.Text("• Positional Allocation Caps:"),
                 ft.Text("   - 1 Keeper: Choose from Offense, Defense, or Special Teams."),
-                ft.Text("   - 2 Keepers: Maximum of 1 from Offense, Defense, or Special Teams."),
-                ft.Text("   - 3 or 4 Keepers: Maximum of 2 from Offense, Defense, or Special Teams."),
+                ft.Text("   - 2 Keepers: Max 1 Offense, Max 1 Defense/ST."),
+                ft.Text("   - 3 or 4 Keepers: Max 2 Offense, Max 2 Defense/ST."),
                 ft.Text("• Rounds 1–4 Rule: A manager may keep only ONE player who costs a Round 1–4 draft pick.", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
                 ft.Text("• Traded / Dropped Player Reset: If a player is traded and kept, or dropped and claimed by a new team, that player resets to Year 2 (kept where drafted previous season).", color=COLOR_GREEN),
             ],
@@ -1028,7 +1097,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             "title": "Commissioner Trade Review & Collusion Policy",
             "keywords": "trades collusion veto review fairness cheating protest commissioner standard",
             "controls": [
-                ft.Text("• Standard for Veto: The commissioner evaluates trades solely for collusion or cheating, not subjective manager fairness. Owners are trusted to evaluate their own team needs."),
+                ft.Text("• Standard for Veto: The commissioner evaluates trades solely for collusion or cheating, not subjective fairness. Owners are trusted to evaluate their own team needs."),
                 ft.Text("• Collusion Review: If a trade appears lopsided or involves an eliminated manager gaining nothing while helping a contender, the commissioner reserves the right to request strategic rationale before ruling."),
                 ft.Text("• Respectful Discourse: Respectful discussion is welcomed; personal attacks or disrespectful conduct can lead to franchise replacement."),
             ],
@@ -1147,25 +1216,65 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         spacing=8,
     )
 
-    refresh_help_articles()
-
-    return ft.ListView(
-        expand=True,
-        spacing=12,
-        padding=15,
+    # Collapsible Top Controls Toolbar for Rules & Help Center
+    help_controls_column = ft.Column(
         controls=[
-            ft.Text("NPK Rules, Scoring & Help Center", size=22, weight=ft.FontWeight.BOLD),
-            ft.Text("Instant lookup for league scoring, cumulative point stacks, keeper tables, payouts, and commissioner rules:", italic=True),
             txt_search,
             category_chips,
-            ft.Divider(height=10),
-            filtered_list,
         ],
+        spacing=8,
+        visible=True,
+    )
+
+    btn_toggle_help_controls = ft.TextButton(
+        "▲ Hide Search / Fullscreen",
+        icon=ft.Icons.KEYBOARD_ARROW_UP,
+    )
+
+    def toggle_help_controls(e):
+        help_controls_column.visible = not help_controls_column.visible
+        if help_controls_column.visible:
+            btn_toggle_help_controls.text = "▲ Hide Search / Fullscreen"
+            btn_toggle_help_controls.icon = ft.Icons.KEYBOARD_ARROW_UP
+        else:
+            btn_toggle_help_controls.text = "▼ Show Search & Categories"
+            btn_toggle_help_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
+        page.update()
+
+    btn_toggle_help_controls.on_click = toggle_help_controls
+
+    refresh_help_articles()
+
+    fixed_top_header = ft.Column(
+        controls=[
+            ft.Row(
+                [
+                    ft.Text("NPK Rules, Scoring & Help Center", size=20, weight=ft.FontWeight.BOLD),
+                    btn_toggle_help_controls,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            help_controls_column,
+            ft.Divider(height=10),
+        ],
+        spacing=4,
+    )
+
+    scrollable_viewer = ft.Column(
+        controls=[filtered_list],
+        scroll=ft.ScrollMode.ADAPTIVE,
+        expand=True,
+    )
+
+    return ft.Column(
+        controls=[fixed_top_header, scrollable_viewer],
+        expand=True,
+        spacing=5,
     )
 
 
 # ---------------------------------------------------------
-# MAIN APP ENTRY POINT (Weekly Hub -> History -> Calculator -> Rules & Help)
+# MAIN APP ENTRY POINT (WITH GLOBAL HEADER COLLAPSE TOGGLE)
 # ---------------------------------------------------------
 def main(page: ft.Page):
     page.title = "NPK Fantasy Football League Dashboard"
@@ -1196,15 +1305,45 @@ def main(page: ft.Page):
         alignment=ft.MainAxisAlignment.CENTER,
     )
 
+    # Master Top Header with Collapse Toggle
+    header_content = ft.Column(
+        controls=[
+            nav_row,
+            ft.Divider(height=8),
+        ],
+        spacing=4,
+        visible=True,
+    )
+
+    btn_toggle_master_header = ft.IconButton(
+        icon=ft.Icons.UNFOLD_LESS,
+        tooltip="Toggle Main Nav Bar",
+    )
+
+    def toggle_master_header(e):
+        header_content.visible = not header_content.visible
+        btn_toggle_master_header.icon = ft.Icons.UNFOLD_MORE if not header_content.visible else ft.Icons.UNFOLD_LESS
+        page.update()
+
+    btn_toggle_master_header.on_click = toggle_master_header
+
+    top_bar = ft.Row(
+        controls=[
+            ft.Text("🏈 NPK FF League", weight=ft.FontWeight.BOLD, size=15, color=ACCENT_AMBER),
+            btn_toggle_master_header,
+        ],
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+    )
+
     page.add(
         ft.Column(
             controls=[
-                nav_row,
-                ft.Divider(height=10),
+                top_bar,
+                header_content,
                 body,
             ],
             expand=True,
-            spacing=5,
+            spacing=3,
         )
     )
 
