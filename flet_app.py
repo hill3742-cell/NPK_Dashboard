@@ -70,7 +70,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         if reset:
             weekly_scale[0] = 1.0
         else:
-            weekly_scale[0] = max(0.6, min(4.0, round(weekly_scale[0] + factor, 2)))
+            weekly_scale[0] = max(0.4, min(2.5, round(weekly_scale[0] + factor, 2)))
 
         weekly_zoom_label.value = f"{int(weekly_scale[0] * 100)}%"
         new_w = int(750 * weekly_scale[0])
@@ -95,10 +95,9 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         border_radius=8,
     )
 
-    # Collapsible Top Controls Toolbar for Weekly Hub
     weekly_controls_column = ft.Column(
         controls=[
-            ft.Text("", size=1),  # populated dynamically
+            ft.Text("", size=1),
             status_label,
             weekly_zoom_bar,
         ],
@@ -142,11 +141,10 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
             status_label.value = f"Showing: {year} Week {week} {media_type}"
             for page_item in matching_pages:
                 if page_item["ext"] in ["png", "jpg", "jpeg", "webp"]:
-                    # Native Flutter InteractiveViewer for mobile multi-touch pinch-to-zoom & pan
                     pinch_viewer = ft.InteractiveViewer(
                         content=ft.Image(src=page_item["path"], fit="contain"),
-                        min_scale=0.8,
-                        max_scale=4.5,
+                        min_scale=0.4,
+                        max_scale=2.5,
                         pan_enabled=True,
                         scale_enabled=True,
                     )
@@ -294,7 +292,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         if reset:
             history_scale[0] = 1.0
         else:
-            history_scale[0] = max(0.6, min(4.0, round(history_scale[0] + factor, 2)))
+            history_scale[0] = max(0.4, min(2.5, round(history_scale[0] + factor, 2)))
 
         history_zoom_label.value = f"{int(history_scale[0] * 100)}%"
         new_w = int(750 * history_scale[0])
@@ -375,8 +373,8 @@ def build_history_tab(page: ft.Page) -> ft.Control:
             for img_path in found_images:
                 pinch_viewer = ft.InteractiveViewer(
                     content=ft.Image(src=img_path, fit="contain"),
-                    min_scale=0.8,
-                    max_scale=4.5,
+                    min_scale=0.4,
+                    max_scale=2.5,
                     pan_enabled=True,
                     scale_enabled=True,
                 )
@@ -786,7 +784,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ),
         ]
 
-    # 3. KNOWLEDGE BASE ARTICLES (STRICT CATEGORY GROUPING)
+    # 3. KNOWLEDGE BASE ARTICLES
     articles = [
         # --- 1. LEAGUE SETUP ---
         {
@@ -836,7 +834,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ],
         },
 
-        # --- 2. POSITION SCORING (INDIVIDUAL POSITIONS FIRST) ---
+        # --- 2. POSITION SCORING ---
         {
             "category": "Scoring",
             "title": "Quarterback (QB) Scoring",
@@ -941,7 +939,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ],
         },
 
-        # --- 2B. CUMULATIVE & STACKING SCORING (PLACED AFTER INDIVIDUAL POSITIONS) ---
+        # --- 2B. CUMULATIVE & STACKING SCORING ---
         {
             "category": "Scoring",
             "title": "Cumulative & Stacking Points (Sacks, Big Plays & 40+ Bonuses)",
@@ -1216,7 +1214,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         spacing=8,
     )
 
-    # Collapsible Top Controls Toolbar for Rules & Help Center
     help_controls_column = ft.Column(
         controls=[
             txt_search,
@@ -1305,7 +1302,6 @@ def main(page: ft.Page):
         alignment=ft.MainAxisAlignment.CENTER,
     )
 
-    # Master Top Header with Collapse Toggle
     header_content = ft.Column(
         controls=[
             nav_row,
