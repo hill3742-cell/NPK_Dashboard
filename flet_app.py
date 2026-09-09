@@ -31,7 +31,7 @@ def create_option(key: str, text: str = None):
 
 
 # ---------------------------------------------------------
-# TAB: WEEKLY HUB (PINCH ZOOM & AUTO-COLLAPSIBLE CONTROLS)
+# TAB 1: WEEKLY HUB (PREVIEWS & RECAPS WITH ZOOM)
 # ---------------------------------------------------------
 def get_weekly_items():
     """Scans assets/weekly for files matching: YYYY_W{num}_(preview|recap)[_p{num}].ext"""
@@ -60,7 +60,7 @@ def get_weekly_items():
 
 def build_weekly_tab(page: ft.Page) -> ft.Control:
     content_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    status_label = ft.Text("", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
+    status_label = ft.Text("", size=15, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
 
     weekly_scale = [1.0]
     weekly_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
@@ -74,16 +74,14 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
         weekly_zoom_label.value = f"{int(weekly_scale[0] * 100)}%"
         new_w = int(750 * weekly_scale[0])
-        new_h = int(680 * weekly_scale[0])
         for c in weekly_containers:
             c.width = new_w
-            c.height = new_h
         page.update()
 
     weekly_zoom_bar = ft.Container(
         content=ft.Row(
             [
-                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=13),
+                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
                 ft.Button("➖", on_click=lambda e: set_weekly_zoom(-0.25)),
                 weekly_zoom_label,
                 ft.Button("➕", on_click=lambda e: set_weekly_zoom(0.25)),
@@ -97,51 +95,11 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         border_radius=8,
     )
 
-    dd_year = ft.Dropdown(label="Year", width=105)
-    dd_preview = ft.Dropdown(label="Past Previews", width=155)
-    dd_recap = ft.Dropdown(label="Past Recaps", width=155)
-
-    # Collapsible container holding dropdowns and zoom controls
-    controls_box = ft.Column(
-        controls=[
-            ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=8),
-            weekly_zoom_bar,
-        ],
-        spacing=8,
-        visible=False,  # Starts collapsed to give maximum room to document
-    )
-
-    def toggle_controls(e=None):
-        controls_box.visible = not controls_box.visible
-        btn_toggle.text = "Hide Controls ▲" if controls_box.visible else "Select / Zoom ▼"
-        page.update()
-
-    btn_toggle = ft.TextButton(
-        "Select / Zoom ▼",
-        icon=ft.Icons.TUNE,
-        on_click=toggle_controls,
-    )
-
-    header_bar = ft.Container(
-        content=ft.Row(
-            [status_label, btn_toggle],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        bgcolor=BG_SURFACE_LIGHT,
-        padding=8,
-        border_radius=8,
-    )
-
-    def display_week_group(year: int, week: int, media_type: str, auto_collapse: bool = True):
+    def display_week_group(year: int, week: int, media_type: str):
         content_display.controls.clear()
         weekly_containers.clear()
         weekly_scale[0] = 1.0
         weekly_zoom_label.value = "100%"
-
-        if auto_collapse:
-            controls_box.visible = False
-            btn_toggle.text = "Select / Zoom ▼"
 
         items = get_weekly_items()
         matching_pages = [
@@ -150,22 +108,15 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         ]
 
         if not matching_pages:
-            status_label.value = "No Previews or Recaps found."
+            status_label.value = "No Previews or Recaps found for this selection."
             content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
         else:
-            status_label.value = f"Showing: {year} W{week} {media_type}"
+            status_label.value = f"Showing: {year} Week {week} {media_type}"
             for page_item in matching_pages:
                 if page_item["ext"] in ["png", "jpg", "jpeg", "webp"]:
-                    # InteractiveViewer enables native 2-finger pinch and drag panning
-                    viewer = ft.InteractiveViewer(
-                        content=ft.Image(src=page_item["path"], fit="contain"),
-                        min_scale=1.0,
-                        max_scale=4.0,
-                    )
                     c = ft.Container(
-                        content=viewer,
+                        content=ft.Image(src=page_item["path"], fit="contain"),
                         width=750,
-                        height=680,
                     )
                     weekly_containers.append(c)
 
@@ -176,8 +127,8 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                     )
                     content_display.controls.append(
                         ft.Card(
-                            content=ft.Container(content=scrollable_row, padding=6),
-                            margin=ft.Margin(0, 4, 0, 8),
+                            content=ft.Container(content=scrollable_row, padding=10),
+                            margin=ft.Margin(0, 8, 0, 8),
                         )
                     )
                 elif page_item["ext"] == "txt":
@@ -198,6 +149,10 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                     )
         page.update()
 
+    dd_year = ft.Dropdown(label="Year", width=110)
+    dd_preview = ft.Dropdown(label="Past Previews", width=160)
+    dd_recap = ft.Dropdown(label="Past Recaps", width=160)
+
     def on_selection_change(e):
         val = e.control.value
         if not val:
@@ -210,7 +165,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         else:
             dd_preview.value = None
 
-        display_week_group(sel_year, sel_week, sel_type, auto_collapse=True)
+        display_week_group(sel_year, sel_week, sel_type)
 
     def populate_controls(selected_year=None):
         items = get_weekly_items()
@@ -241,9 +196,9 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                 dd_preview.value = key_val
             else:
                 dd_recap.value = key_val
-            display_week_group(latest["year"], latest["week"], latest["type"], auto_collapse=True)
+            display_week_group(latest["year"], latest["week"], latest["type"])
         else:
-            status_label.value = "No Previews or Recaps found."
+            status_label.value = "No Previews or Recaps found for this season."
             content_display.controls.clear()
             content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
             page.update()
@@ -267,11 +222,12 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
 
     fixed_top_header = ft.Column(
         controls=[
-            header_bar,
-            controls_box,
-            ft.Divider(height=6),
+            ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=10),
+            status_label,
+            weekly_zoom_bar,
+            ft.Divider(height=10),
         ],
-        spacing=6,
+        spacing=8,
     )
 
     scrollable_viewer = ft.Column(
@@ -283,16 +239,15 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
     return ft.Column(
         controls=[fixed_top_header, scrollable_viewer],
         expand=True,
-        spacing=4,
+        spacing=5,
     )
 
 
 # ---------------------------------------------------------
-# TAB: HISTORY ARCHIVES (PINCH ZOOM & AUTO-COLLAPSIBLE)
+# TAB 2: HISTORY ARCHIVES (FIXED TOOLBAR ZOOM VIEWER)
 # ---------------------------------------------------------
 def build_history_tab(page: ft.Page) -> ft.Control:
     history_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    history_status = ft.Text("Showing Season: 2025", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
 
     history_scale = [1.0]
     history_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
@@ -306,16 +261,14 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
         history_zoom_label.value = f"{int(history_scale[0] * 100)}%"
         new_w = int(750 * history_scale[0])
-        new_h = int(680 * history_scale[0])
         for c in history_containers:
             c.width = new_w
-            c.height = new_h
         page.update()
 
     history_zoom_bar = ft.Container(
         content=ft.Row(
             [
-                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=13),
+                ft.Text("Zoom:", weight=ft.FontWeight.BOLD, size=14),
                 ft.Button("➖", on_click=lambda e: set_history_zoom(-0.25)),
                 history_zoom_label,
                 ft.Button("➕", on_click=lambda e: set_history_zoom(0.25)),
@@ -329,55 +282,11 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         border_radius=8,
     )
 
-    years = [str(y) for y in range(2025, 2010, -1)]
-    dd_history_year = ft.Dropdown(
-        label="Select Season",
-        options=[create_option(y) for y in years],
-        value="2025",
-        width=150,
-    )
-
-    history_controls_box = ft.Column(
-        controls=[
-            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
-            history_zoom_bar,
-        ],
-        spacing=8,
-        visible=False,
-    )
-
-    def toggle_history_controls(e=None):
-        history_controls_box.visible = not history_controls_box.visible
-        btn_hist_toggle.text = "Hide Controls ▲" if history_controls_box.visible else "Season / Zoom ▼"
-        page.update()
-
-    btn_hist_toggle = ft.TextButton(
-        "Season / Zoom ▼",
-        icon=ft.Icons.TUNE,
-        on_click=toggle_history_controls,
-    )
-
-    history_header_bar = ft.Container(
-        content=ft.Row(
-            [history_status, btn_hist_toggle],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        bgcolor=BG_SURFACE_LIGHT,
-        padding=8,
-        border_radius=8,
-    )
-
-    def load_season_images(year, auto_collapse: bool = True):
+    def load_season_images(year):
         history_display.controls.clear()
         history_containers.clear()
         history_scale[0] = 1.0
         history_zoom_label.value = "100%"
-        history_status.value = f"Showing Season: {year}"
-
-        if auto_collapse:
-            history_controls_box.visible = False
-            btn_hist_toggle.text = "Season / Zoom ▼"
 
         search_dirs = [HISTORY_DIR, ASSETS_DIR]
         pattern = re.compile(rf"^{year}.*\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
@@ -392,15 +301,9 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
         if found_images:
             for img_path in found_images:
-                viewer = ft.InteractiveViewer(
-                    content=ft.Image(src=img_path, fit="contain"),
-                    min_scale=1.0,
-                    max_scale=4.0,
-                )
                 c = ft.Container(
-                    content=viewer,
+                    content=ft.Image(src=img_path, fit="contain"),
                     width=750,
-                    height=680,
                 )
                 history_containers.append(c)
 
@@ -411,8 +314,8 @@ def build_history_tab(page: ft.Page) -> ft.Control:
                 )
                 history_display.controls.append(
                     ft.Card(
-                        content=ft.Container(content=scrollable_row, padding=6),
-                        margin=ft.Margin(0, 4, 0, 8),
+                        content=ft.Container(content=scrollable_row, padding=10),
+                        margin=ft.Margin(0, 8, 0, 8),
                     )
                 )
         else:
@@ -421,22 +324,31 @@ def build_history_tab(page: ft.Page) -> ft.Control:
             )
         page.update()
 
+    years = [str(y) for y in range(2025, 2010, -1)]
+    dd_history_year = ft.Dropdown(
+        label="Select Season",
+        options=[create_option(y) for y in years],
+        value="2025",
+        width=150,
+    )
+
     def on_year_select(e):
-        load_season_images(dd_history_year.value, auto_collapse=True)
+        load_season_images(dd_history_year.value)
 
     dd_history_year.on_change = on_year_select
     if hasattr(dd_history_year, "on_select"):
         dd_history_year.on_select = on_year_select
 
-    load_season_images("2025", auto_collapse=True)
+    load_season_images("2025")
 
     fixed_top_header = ft.Column(
         controls=[
-            history_header_bar,
-            history_controls_box,
-            ft.Divider(height=6),
+            ft.Text("Historical Season Archives", size=20, weight=ft.FontWeight.BOLD),
+            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
+            history_zoom_bar,
+            ft.Divider(height=10),
         ],
-        spacing=6,
+        spacing=8,
     )
 
     scrollable_viewer = ft.Column(
@@ -448,12 +360,12 @@ def build_history_tab(page: ft.Page) -> ft.Control:
     return ft.Column(
         controls=[fixed_top_header, scrollable_viewer],
         expand=True,
-        spacing=4,
+        spacing=5,
     )
 
 
 # ---------------------------------------------------------
-# TAB: KEEPER CALCULATOR & VALIDATOR
+# TAB 3: KEEPER CALCULATOR & VALIDATOR
 # ---------------------------------------------------------
 def build_keeper_tab(page: ft.Page) -> ft.Control:
     txt_player = ft.TextField(label="Player Name", value="Kyren Williams", expand=True)
@@ -577,58 +489,683 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# TAB: RULES & SETTINGS
+# EXCEL PAYOUT READER (2026 Fantasy Football Payouts.xlsm)
 # ---------------------------------------------------------
-def build_rules_tab(page: ft.Page) -> ft.Control:
+def load_payouts_from_excel():
+    """Dynamically reads the Payout tab from 2026 Fantasy Football Payouts.xlsm."""
+    possible_names = [
+        "2026 Fantasy Football Payouts.xlsm",
+        "2026 Fantasy Football Payouts.xlsx",
+        os.path.join(ASSETS_DIR, "2026 Fantasy Football Payouts.xlsm"),
+        os.path.join(ASSETS_DIR, "2026 Fantasy Football Payouts.xlsx"),
+    ]
+    target_file = None
+    for p in possible_names:
+        if os.path.exists(p):
+            target_file = p
+            break
+
+    if not target_file:
+        return None, "File '2026 Fantasy Football Payouts.xlsm' not found in workspace directory."
+
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(target_file, data_only=True)
+        target_sheet = None
+        for name in wb.sheetnames:
+            if "payout" in name.lower() or "winning" in name.lower() or "prize" in name.lower():
+                target_sheet = name
+                break
+        if not target_sheet:
+            target_sheet = wb.sheetnames[0]
+
+        ws = wb[target_sheet]
+        rows = []
+        for r in ws.iter_rows(values_only=True):
+            if any(cell is not None and str(cell).strip() != "" for cell in r):
+                cleaned_row = [str(c).strip() if c is not None else "" for c in r]
+                rows.append(cleaned_row)
+
+        return {"filename": target_file, "sheet": target_sheet, "rows": rows}, None
+    except Exception as err:
+        return None, f"Could not parse Excel workbook: {err}"
+
+
+# ---------------------------------------------------------
+# TAB 4: RULES, SCORING & HELP CENTER (SEARCHABLE)
+# ---------------------------------------------------------
+def build_help_center_tab(page: ft.Page) -> ft.Control:
+    # 1. KEEPER DATA MATRICES (OFFENSE & DEFENSE)
+    offense_rows = [
+        ("1", "1", "1", "1", "1", "1", "1", "1"),
+        ("2", "2", "1", "1", "1", "1", "1", "1"),
+        ("3", "3", "1", "1", "1", "1", "1", "1"),
+        ("4", "4", "1", "1", "1", "1", "1", "1"),
+        ("5", "5", "2", "1", "1", "1", "1", "1"),
+        ("6", "6", "2", "1", "1", "1", "1", "1"),
+        ("7", "7", "3", "1", "1", "1", "1", "1"),
+        ("8", "8", "3", "1", "1", "1", "1", "1"),
+        ("9", "9", "4", "2", "1", "1", "1", "1"),
+        ("10", "10", "4", "2", "1", "1", "1", "1"),
+        ("11", "11", "5", "3", "1", "1", "1", "1"),
+        ("12", "12", "5", "3", "1", "1", "1", "1"),
+        ("13", "13", "6", "4", "2", "1", "1", "1"),
+        ("14", "14", "6", "4", "2", "1", "1", "1"),
+        ("15", "15", "6", "4", "2", "1", "1", "1"),
+        ("16", "16", "6", "4", "2", "1", "1", "1"),
+        ("17", "17", "7", "5", "3", "1", "1", "1"),
+        ("18", "18", "7", "5", "3", "1", "1", "1"),
+        ("19", "19", "8", "6", "4", "2", "1", "1"),
+        ("20", "20", "8", "6", "4", "2", "1", "1"),
+        ("21", "21", "9", "7", "5", "3", "1", "1"),
+        ("22", "22", "9", "7", "5", "3", "1", "1"),
+        ("23", "23", "10", "8", "6", "4", "2", "1"),
+        ("24", "24", "10", "8", "6", "4", "2", "1"),
+    ]
+
+    dt_offense = ft.DataTable(
+        heading_row_color=BG_SURFACE_LIGHT,
+        columns=[
+            ft.DataColumn(ft.Text("INITIAL DRAFT", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+            ft.DataColumn(ft.Text("2ND YEAR (1st Kept)", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("3RD YEAR (2nd Kept)", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("4th YEAR (3rd Kept)", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("5th YEAR", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("6th YEAR", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("7th YEAR", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("8th YEAR", weight=ft.FontWeight.BOLD)),
+        ],
+        rows=[
+            ft.DataRow(
+                cells=[
+                    ft.DataCell(ft.Text(r[0], weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                    *[ft.DataCell(ft.Text(v)) for v in r[1:]],
+                ]
+            )
+            for r in offense_rows
+        ] + [
+            ft.DataRow(
+                color=BG_SURFACE_LIGHT,
+                cells=[
+                    ft.DataCell(ft.Text("RULE:", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                    ft.DataCell(ft.Text("Same Round", italic=True)),
+                    ft.DataCell(ft.Text("(Prior/2)-1 or -2", italic=True, color=ACCENT_AMBER)),
+                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
+                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
+                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
+                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
+                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
+                ],
+            )
+        ],
+        column_spacing=18,
+    )
+
+    defense_rows = [
+        ("1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1"),
+        ("2", "2", "1", "1", "1", "1", "1", "1", "1", "1", "1"),
+        ("3", "3", "1", "1", "1", "1", "1", "1", "1", "1", "1"),
+        ("4", "4", "2", "1", "1", "1", "1", "1", "1", "1", "1"),
+        ("5", "5", "3", "1", "1", "1", "1", "1", "1", "1", "1"),
+        ("6", "6", "4", "2", "1", "1", "1", "1", "1", "1", "1"),
+        ("7", "7", "4", "2", "1", "1", "1", "1", "1", "1", "1"),
+        ("8", "8", "5", "3", "1", "1", "1", "1", "1", "1", "1"),
+        ("9", "9", "6", "4", "2", "1", "1", "1", "1", "1", "1"),
+        ("10", "10", "7", "5", "3", "1", "1", "1", "1", "1", "1"),
+        ("11", "11", "7", "5", "3", "1", "1", "1", "1", "1", "1"),
+        ("12", "12", "8", "6", "4", "2", "1", "1", "1", "1", "1"),
+        ("13", "13", "9", "7", "5", "3", "1", "1", "1", "1", "1"),
+        ("14", "14", "9", "7", "5", "3", "1", "1", "1", "1", "1"),
+        ("15", "15", "9", "7", "5", "3", "1", "1", "1", "1", "1"),
+        ("16", "16", "10", "8", "6", "4", "2", "1", "1", "1", "1"),
+        ("17", "17", "11", "9", "7", "5", "3", "1", "1", "1", "1"),
+        ("18", "18", "12", "10", "8", "6", "4", "2", "1", "1", "1"),
+        ("19", "19", "12", "10", "8", "6", "4", "2", "1", "1", "1"),
+        ("20", "20", "13", "11", "9", "7", "5", "3", "1", "1", "1"),
+        ("21", "21", "14", "12", "10", "8", "6", "4", "2", "1", "1"),
+        ("22", "22", "15", "13", "11", "9", "7", "5", "3", "1", "1"),
+        ("23", "23", "15", "13", "11", "9", "7", "5", "3", "1", "1"),
+        ("24", "24", "16", "14", "12", "10", "8", "6", "4", "2", "1"),
+    ]
+
+    dt_defense = ft.DataTable(
+        heading_row_color=BG_SURFACE_LIGHT,
+        columns=[
+            ft.DataColumn(ft.Text("INITIAL DRAFT", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+            ft.DataColumn(ft.Text("2ND YR (1st)")),
+            ft.DataColumn(ft.Text("3RD YR (2nd)")),
+            ft.DataColumn(ft.Text("4th YR")),
+            ft.DataColumn(ft.Text("5th YR")),
+            ft.DataColumn(ft.Text("6th YR")),
+            ft.DataColumn(ft.Text("7th YR")),
+            ft.DataColumn(ft.Text("8th YR")),
+            ft.DataColumn(ft.Text("9th YR")),
+            ft.DataColumn(ft.Text("10th YR")),
+            ft.DataColumn(ft.Text("11th YR")),
+        ],
+        rows=[
+            ft.DataRow(
+                cells=[
+                    ft.DataCell(ft.Text(r[0], weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                    *[ft.DataCell(ft.Text(v)) for v in r[1:]],
+                ]
+            )
+            for r in defense_rows
+        ] + [
+            ft.DataRow(
+                color=BG_SURFACE_LIGHT,
+                cells=[
+                    ft.DataCell(ft.Text("RULE:", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                    ft.DataCell(ft.Text("Same Round", italic=True)),
+                    ft.DataCell(ft.Text("Prior-(P/4)-1/2", italic=True, color=ACCENT_AMBER)),
+                    *[ft.DataCell(ft.Text("Prior - 2", italic=True)) for _ in range(8)],
+                ],
+            )
+        ],
+        column_spacing=12,
+    )
+
+    # 2. LOAD EXCEL PAYOUT TABLE
+    payout_info, payout_err = load_payouts_from_excel()
+    payout_display_controls = []
+
+    if payout_info and payout_info.get("rows"):
+        p_rows = payout_info["rows"]
+        headers = [str(c) if str(c) != "" else f"Col {idx+1}" for idx, c in enumerate(p_rows[0])]
+        data_rows = p_rows[1:]
+        max_cols = max(len(r) for r in p_rows)
+
+        columns = [ft.DataColumn(ft.Text(h, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)) for h in headers]
+        if len(columns) < max_cols:
+            for i in range(len(columns), max_cols):
+                columns.append(ft.DataColumn(ft.Text(f"Col {i+1}", weight=ft.FontWeight.BOLD)))
+
+        payout_data_rows = []
+        for r in data_rows:
+            padded_row = list(r) + [""] * (max_cols - len(r))
+            payout_data_rows.append(
+                ft.DataRow(cells=[ft.DataCell(ft.Text(str(val))) for val in padded_row[:max_cols]])
+            )
+
+        dt_payout = ft.DataTable(
+            heading_row_color=BG_SURFACE_LIGHT,
+            columns=columns,
+            rows=payout_data_rows,
+            column_spacing=15,
+        )
+
+        payout_display_controls = [
+            ft.Text(f"📊 Live Data Loaded from Sheet: '{payout_info['sheet']}'", color=COLOR_GREEN, weight=ft.FontWeight.BOLD),
+            ft.Row([dt_payout], scroll=ft.ScrollMode.ADAPTIVE),
+        ]
+    else:
+        payout_display_controls = [
+            ft.Text(f"Notice: {payout_err or 'Place 2026 Fantasy Football Payouts.xlsm in folder to load dynamic ledger.'}", italic=True),
+            ft.DataTable(
+                heading_row_color=BG_SURFACE_LIGHT,
+                columns=[
+                    ft.DataColumn(ft.Text("Finish / Award", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                    ft.DataColumn(ft.Text("Official Payout", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+                ],
+                rows=[
+                    ft.DataRow(cells=[ft.DataCell(ft.Text("1st Place (Super Bowl Champion)")), ft.DataCell(ft.Text("$600.00", weight=ft.FontWeight.BOLD))]),
+                    ft.DataRow(cells=[ft.DataCell(ft.Text("2nd Place (Super Bowl Runner-Up)")), ft.DataCell(ft.Text("$300.00", weight=ft.FontWeight.BOLD))]),
+                    ft.DataRow(cells=[ft.DataCell(ft.Text("3rd Place Winner")), ft.DataCell(ft.Text("$100.00", weight=ft.FontWeight.BOLD))]),
+                    ft.DataRow(cells=[ft.DataCell(ft.Text("Regular Season Most Points")), ft.DataCell(ft.Text("$100.00", weight=ft.FontWeight.BOLD))]),
+                    ft.DataRow(cells=[ft.DataCell(ft.Text("Division Winners / Weekly Highs")), ft.DataCell(ft.Text("$100.00", weight=ft.FontWeight.BOLD))]),
+                ],
+            ),
+        ]
+
+    # 3. COMPLETE KNOWLEDGE BASE (SETUP, SCORING, KEEPERS, FINANCES, DRAFT, BENCH, TRADES, POSTSEASON, PAYOUTS)
+    articles = [
+        # --- 1. LEAGUE SETUP ---
+        {
+            "category": "Setup",
+            "title": "League Structure & Format",
+            "keywords": "setup format 12 teams divisions head to head h2h scoring week 1 fractional negative yahoo",
+            "controls": [
+                ft.Text("• League Size: 12 Teams across 2 Divisions."),
+                ft.Text("• Format: Head-to-Head weekly matchups beginning Week 1."),
+                ft.Text("• Scoring Modifiers: Fractional and negative points active across all positions."),
+                ft.Text("• Can't Cut List: None (commissioner and managers retain full roster control)."),
+            ],
+        },
+        {
+            "category": "Setup",
+            "title": "Roster Slots & Lineup Requirements (24 Total)",
+            "keywords": "setup roster composition starters bench ir slots flex position lineup 15 starters 9 bench 2 ir",
+            "controls": [
+                ft.Text("• Total Active Roster: 24 players."),
+                ft.Text("• 15 Starters: 1 QB, 2 WR, 2 RB, 1 TE, 1 W/R/T (Offensive Flex), 1 K, 1 D (Defensive Flex), 2 LB, 1 DT, 1 DE, 1 CB, 1 S.", weight=ft.FontWeight.BOLD),
+                ft.Text("• 9 Bench Spots: Max 6 per side of ball (Offense, Defense, Special Teams)."),
+                ft.Text("• 2 IR Slots: Eligible for Yahoo-designated IR players and postponed games (players can be added directly from waivers/FA)."),
+            ],
+        },
+        {
+            "category": "Setup",
+            "title": "Waivers & Free Agency System (FAAB)",
+            "keywords": "setup waivers faab fab bidding budget claims rolling continuous schedule tuesday claim period",
+            "controls": [
+                ft.Text("• System: FAAB (FAB with continual rolling list tiebreak)."),
+                ft.Text("• Weekly Schedule: Game Time through Tuesday morning."),
+                ft.Text("• Waiver Claim Window: 2 days (Follows standard waiver rules post-draft)."),
+                ft.Text("• Transaction Limits: No seasonal or weekly maximum caps on acquisitions or trades."),
+            ],
+        },
+        {
+            "category": "Setup",
+            "title": "Playoff Structure & Seeding System",
+            "keywords": "setup playoffs postseason seeds byes reseeding tiebreaker consolation weeks 15 16 17",
+            "controls": [
+                ft.Text("• Playoff Teams: 6 teams qualify for the Championship Bracket."),
+                ft.Text("• Postseason Schedule: Weeks 15, 16, and 17."),
+                ft.Text("• Seeding: Division winners receive top playoff seeds (#1 and #2 with first-round byes)."),
+                ft.Text("• Reseeding: Active each round."),
+                ft.Text("• Tie-Breaker: Best regular-season record vs. opponent wins."),
+                ft.Text("• Consolation Tournament: 6 non-playoff teams compete for the #1 draft pick choice privilege."),
+            ],
+        },
+
+        # --- 2. POSITION SCORING (OFFENSE, KICKING, DEFENSE) ---
+        {
+            "category": "Scoring",
+            "title": "Quarterback (QB) Scoring",
+            "keywords": "scoring qb quarterback passing yards touchdowns interceptions pick six rush rushing bonus 200 300 400",
+            "controls": [
+                ft.Text("• Passing Yards: 20 yards per point (0.05 pts/yd)."),
+                ft.Text("• Passing Milestones: +1 pt bonus at 200 yds, +1 pt at 300 yds, +1 pt at 400 yds.", color=ACCENT_AMBER),
+                ft.Text("• Passing Touchdowns: 4 pts."),
+                ft.Text("• 40+ Yard Passing Bonuses: +0.5 pt for 40+ completion; +1 pt for 40+ passing TD."),
+                ft.Text("• Interceptions: -1 pt (-2 pts if returned for Pick-Six)."),
+                ft.Text("• Rushing Yards: 10 yards per point (0.1 pts/yd; +1 bonus at 80, 100, 150 yds)."),
+                ft.Text("• Rushing Touchdowns: 6 pts (+0.5 pt bonus for 40+ run; +1 pt for 40+ rush TD)."),
+                ft.Text("• Turnovers: -0.5 pt for fumble; -2 pts for fumble lost."),
+            ],
+        },
+        {
+            "category": "Scoring",
+            "title": "Running Back (RB) Scoring",
+            "keywords": "scoring rb running back rushing ppr receptions receiving return yards touchdowns 40 yard bonus",
+            "controls": [
+                ft.Text("• Receptions: 1.0 point per reception (Full PPR).", weight=ft.FontWeight.BOLD, color=COLOR_GREEN),
+                ft.Text("• Rushing Yards: 10 yards per point (0.1 pts/yd; +1 bonus at 80, 100, 150 yds)."),
+                ft.Text("• Rushing Touchdowns: 6 pts (+0.5 pt bonus for 40+ run; +1 pt for 40+ rush TD)."),
+                ft.Text("• Receiving Yards: 10 yards per point (0.1 pts/yd; +1 bonus at 100, 150, 200 yds)."),
+                ft.Text("• Receiving Touchdowns: 6 pts (+0.5 pt bonus for 40+ catch; +1 pt for 40+ rec TD)."),
+                ft.Text("• Return Yards: 15 yards per point (+1 bonus at 50, 75, 125 yds; 6 pts per return TD)."),
+                ft.Text("• Fumbles: -0.5 pt for fumble; -2 pts for fumble lost."),
+            ],
+        },
+        {
+            "category": "Scoring",
+            "title": "Wide Receiver (WR) Scoring",
+            "keywords": "scoring wr wide receiver receptions ppr receiving return yards touchdowns 40 yard bonus",
+            "controls": [
+                ft.Text("• Receptions: 1.0 point per reception (Full PPR).", weight=ft.FontWeight.BOLD, color=COLOR_GREEN),
+                ft.Text("• Receiving Yards: 10 yards per point (0.1 pts/yd; +1 bonus at 100, 150, 200 yds)."),
+                ft.Text("• Receiving Touchdowns: 6 pts (+0.5 pt bonus for 40+ catch; +1 pt for 40+ rec TD)."),
+                ft.Text("• Rushing: 10 yds/pt (+1 bonus at 80, 100, 150 yds; 6 pts per rush TD)."),
+                ft.Text("• Return Yards: 15 yards per point (+1 bonus at 50, 75, 125 yds; 6 pts per return TD)."),
+                ft.Text("• 2-Point Conversions: 2 pts."),
+                ft.Text("• Fumbles: -0.5 pt for fumble; -2 pts for fumble lost."),
+            ],
+        },
+        {
+            "category": "Scoring",
+            "title": "Tight End (TE) Scoring",
+            "keywords": "scoring te tight end receptions ppr receiving touchdowns 40 yard bonus",
+            "controls": [
+                ft.Text("• Receptions: 1.0 point per reception (Full PPR).", weight=ft.FontWeight.BOLD, color=COLOR_GREEN),
+                ft.Text("• Receiving Yards: 10 yards per point (0.1 pts/yd; +1 bonus at 100, 150, 200 yds)."),
+                ft.Text("• Receiving Touchdowns: 6 pts (+0.5 pt bonus for 40+ catch; +1 pt for 40+ rec TD)."),
+                ft.Text("• Rushing & 2-Pt Conversions: 10 yds/pt; 6 pts per rush TD; 2 pts per 2-PT conversion."),
+                ft.Text("• Fumbles: -0.5 pt for fumble; -2 pts for fumble lost."),
+            ],
+        },
+        {
+            "category": "Scoring",
+            "title": "Kicker (K) Scoring",
+            "keywords": "scoring k kicker field goal pat point after missed extra point 40 50 fg",
+            "controls": [
+                ft.Text("• Field Goals Made:"),
+                ft.Text("   - 0–39 Yards: 3 pts"),
+                ft.Text("   - 40–49 Yards: 4 pts"),
+                ft.Text("   - 50+ Yards: 5 pts"),
+                ft.Text("• Field Goals Missed: -1 pt (0–19 yds); -0.5 pts (20–29 yds); 0 pts (30+ yds)."),
+                ft.Text("• Extra Points (PAT): 1 pt made; -1 pt missed."),
+            ],
+        },
+        {
+            "category": "Scoring",
+            "title": "Defensive Line (DE & DT) Scoring",
+            "keywords": "scoring de dt defensive end defensive tackle sacks tackles tfl fumbles safety blocked kick idp",
+            "controls": [
+                ft.Text("• Solo Tackle: 1.5 pts | Assisted Tackle: 0.75 pts."),
+                ft.Text("• Sacks & TFL: 1.0 pt per Sack; 1.0 pt per Tackle for Loss (TFL)."),
+                ft.Text("• Big Plays: Forced Fumble (2 pts), Fumble Recovery (1 pt), Blocked Kick (2 pts), Safety (2 pts)."),
+                ft.Text("• Touchdowns & Returns: Defensive TD (6 pts); Turnover Return Yards (15 yds/pt); Extra Point Returned (2 pts)."),
+            ],
+        },
+        {
+            "category": "Scoring",
+            "title": "Linebacker (LB) Scoring",
+            "keywords": "scoring lb linebacker solo tackle assist sack interception pass defended tfl idp",
+            "controls": [
+                ft.Text("• Solo Tackle: 1.5 pts | Assisted Tackle: 0.75 pts."),
+                ft.Text("• Sacks & TFL: 1.0 pt per Sack; 1.0 pt per Tackle for Loss (TFL)."),
+                ft.Text("• Coverage: Interception (3 pts); Pass Defended (2 pts)."),
+                ft.Text("• Big Plays: Forced Fumble (2 pts); Recovery (1 pt); Defensive TD (6 pts); Safety (2 pts)."),
+                ft.Text("• Turnover Return Yards: 15 yards per point."),
+            ],
+        },
+        {
+            "category": "Scoring",
+            "title": "Secondary (CB & S) Scoring",
+            "keywords": "scoring cb s corner cornerback safety defensive back interception pass defended tackle idp",
+            "controls": [
+                ft.Text("• Interceptions: 3 pts | Passes Defended: 2 pts."),
+                ft.Text("• Solo Tackle: 1.5 pts | Assisted Tackle: 0.75 pts."),
+                ft.Text("• Sacks & TFL: 1.0 pt per Sack; 1.0 pt per Tackle for Loss (TFL)."),
+                ft.Text("• Big Plays: Forced Fumble (2 pts); Recovery (1 pt); Blocked Kick / Safety (2 pts each)."),
+                ft.Text("• Touchdowns: Defensive TD (6 pts); Extra Point Returned (2 pts); Turnover Return (15 yds/pt)."),
+            ],
+        },
+
+        # --- CUMULATIVE & STACKING SCORING (AFTER INDIVIDUAL POSITIONS) ---
+        {
+            "category": "Scoring",
+            "title": "Cumulative & Stacking Points (Sacks, Big Plays & 40+ Bonuses)",
+            "keywords": "scoring cumulative stacking stack sack sacks tfl tackle for loss solo tackle bonus 40 yard pick-six strip sack add on add-on",
+            "controls": [
+                ft.Text("How Cumulative (Add-On) Scoring Works in NPK", size=17, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("In Yahoo Fantasy IDP and NPK scoring rules, statistical events on a single play stack cumulatively. A sack is not an isolated event; it is officially recorded as an unassisted tackle of a quarterback behind the line of scrimmage."),
+                ft.Divider(height=10),
+                ft.Text("The Solo Sack Breakdown (3.5 Points Total):", weight=ft.FontWeight.BOLD),
+                ft.Text("• Solo Tackle: +1.5 pts (bringing down the ball carrier)"),
+                ft.Text("• Tackle for Loss (TFL): +1.0 pt (tackle made behind the line of scrimmage)"),
+                ft.Text("• Sack: +1.0 pt (tackle made on the QB attempting to pass)"),
+                ft.Text("➡️ Cumulative Total for 1 Solo Sack = 3.5 Fantasy Points!", color=COLOR_GREEN, weight=ft.FontWeight.BOLD),
+                ft.Divider(height=10),
+                ft.Text("Assisted (Half) Sack: Tackle Assist (+0.75) + Half Sack (+0.50) = 1.25 pts (or 1.75 pts if half TFL credited)."),
+                ft.Text("Strip-Sack & Recovery: Solo Sack (3.5) + Forced Fumble (+2.0) + Fumble Recovery (+1.0) = 6.5 pts (+6.0 pts if returned for TD)."),
+                ft.Divider(height=10),
+                ft.Text("Offensive Stacking Examples:", weight=ft.FontWeight.BOLD),
+                ft.Text("• 40+ Yard Passing TD (45 yds): Yards (2.25) + Pass TD (4.0) + 40+ Completion (+0.5) + 40+ Pass TD (+1.0) = 7.75 pts."),
+                ft.Text("• 40+ Yard Rushing TD (45 yds): Yards (4.5) + Rush TD (6.0) + 40+ Run (+0.5) + 40+ Rush TD (+1.0) = 12.0 pts."),
+                ft.Text("• 40+ Yard Receiving TD (45 yds): Full PPR (1.0) + Yards (4.5) + Rec TD (6.0) + 40+ Rec (+0.5) + 40+ Rec TD (+1.0) = 13.0 pts."),
+                ft.Text("• Pick-Six Thrown: Interception (-1.0) + Pick-Six (-2.0) = -3.0 pts total."),
+                ft.Text("• Fumbles Lost: Fumble (-0.5) + Fumble Lost (-2.0) = -2.5 pts total."),
+            ],
+        },
+
+        # --- 3. KEEPERS & RECREATED TABLES ---
+        {
+            "category": "Keepers",
+            "title": "Official Offense Keeper Table (8-Year Progression)",
+            "keywords": "keeper offense table chart progression multi-year rounds initial draft 2nd 3rd 4th 5th 6th 7th 8th",
+            "controls": [
+                ft.Text("OFFENSE KEEPER TABLE", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("(2nd row is years on roster, 2nd year = 1st time as keeper)", italic=True),
+                ft.Row([dt_offense], scroll=ft.ScrollMode.ADAPTIVE),
+            ],
+        },
+        {
+            "category": "Keepers",
+            "title": "Official Defense Keeper Table (11-Year Progression)",
+            "keywords": "keeper defense table chart progression multi-year rounds initial draft 11 years idp",
+            "controls": [
+                ft.Text("DEFENSE KEEPER TABLE", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("(2nd row is years on roster, 2nd year = 1st time as keeper)", italic=True),
+                ft.Row([dt_defense], scroll=ft.ScrollMode.ADAPTIVE),
+            ],
+        },
+        {
+            "category": "Keepers",
+            "title": "Keeper Allocation Limits & Rounds 1–4 Cap",
+            "keywords": "keepers amount max 4 allocation rounds 1-4 first four rounds limit",
+            "controls": [
+                ft.Text("• Maximum Keepers: Teams may keep up to 4 players (0, 1, 2, 3, or 4)."),
+                ft.Text("• Positional Allocation Caps:"),
+                ft.Text("   - 1 Keeper: Choose from Offense, Defense, or Special Teams."),
+                ft.Text("   - 2 Keepers: Maximum of 1 from Offense, Defense, or Special Teams."),
+                ft.Text("   - 3 or 4 Keepers: Maximum of 2 from Offense, Defense, or Special Teams."),
+                ft.Text("• Rounds 1–4 Rule: A manager may keep only ONE player who costs a Round 1–4 draft pick.", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
+                ft.Text("• Traded / Dropped Player Reset: If a player is traded and kept, or dropped and claimed by a new team, that player resets to Year 2 (kept where drafted previous season).", color=COLOR_GREEN),
+            ],
+        },
+        {
+            "category": "Keepers",
+            "title": "Keeper Draft Pick Cost Calculations & Undrafted Formulas",
+            "keywords": "keepers cost undrafted 13th 20th 12th 19th reset traded dropped free agent math calculation year",
+            "controls": [
+                ft.Text("• 1st Year Kept (2nd Year on Team): Costs round drafted previous season."),
+                ft.Text("• Undrafted Free Agents:"),
+                ft.Text("   - Offense: 13th round (1st kept), 12th round (2nd kept)."),
+                ft.Text("   - Defense: 20th round (1st kept), 19th round (2nd kept)."),
+                ft.Text("• 2nd Year as Keeper (3rd Year on Team):"),
+                ft.Text("   - Offense: (Prior Round / 2) - 1 (if prior 1-14) or - 2 (if prior 15-24). Round down."),
+                ft.Text("   - Defense: Prior Round - (Prior / 4) - 1 (if prior 1-13) or - 2 (if prior 14-24). Round down."),
+                ft.Text("• 3rd+ Time Kept (4th+ Year on Team): Subtract 2 from prior round (Floor = Round 1)."),
+            ],
+        },
+
+        # --- 4. FINANCES & DRAFT ---
+        {
+            "category": "Finances",
+            "title": "Entry Fees, Deadlines & Guarantee Policy",
+            "keywords": "finances money buy in buy-in fee deadline august freeze replace cost cash 100",
+            "controls": [
+                ft.Text("• Buy-In: $100 per team."),
+                ft.Text("• Due Date: Entry fee deadlines are communicated via email or posted on the league tab (typically around August 1)."),
+                ft.Text("• Payment Arrangements: Special payment arrangements are only valid with commissioner approval. The commissioner is solely responsible for guaranteeing league funds."),
+                ft.Text("• Non-Payment Penalty: If fee or arrangement is not received by the deadline, the team is frozen for 3 days, after which the franchise may be reassigned to a replacement owner.", color=COLOR_RED),
+            ],
+        },
+        {
+            "category": "Draft",
+            "title": "Draft Guidelines, Schedule & Slot Selection",
+            "keywords": "draft snake consolation order tournament pick time date schedule rounds 24",
+            "controls": [
+                ft.Text("• Draft Format: Snake style draft (24 rounds)."),
+                ft.Text("• Annual Schedule: Draft times and dates are set each season by the commissioner, published directly inside the app, and texted to all team managers."),
+                ft.Text("• Consolation Champion Privilege: The Winner of the Consolation Tournament receives the choice of their draft position (deadline to select is typically one week prior to the draft).", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
+                ft.Text("• Consolation Ranks (Picks 2–6): The remaining 5 consolation tournament participants fill the next highest available draft positions based on rank."),
+                ft.Text("• Championship Finishers (Picks 7–12): Championship bracket participants draft in the lowest 6 slots based on final playoff finish (12th: Super Bowl Winner; 11th: Runner-Up; 9th/10th: 3rd place game; 7th/8th: 5th place game)."),
+            ],
+        },
+
+        # --- 5. BENCH & IR ---
+        {
+            "category": "Bench & IR",
+            "title": "Bench Capacity & Positional Limit (Max 6 Per Side)",
+            "keywords": "bench limit max 6 offense defense special teams position roster illegal violation",
+            "controls": [
+                ft.Text("• Total Bench Spots: 9 bench positions."),
+                ft.Text("• Maximum Per Side: A team may use a maximum of 6 bench positions for Offense, Defense, or Special Teams.", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
+                ft.Text("• Manager Responsibility: Every team manager is strictly responsible for monitoring their roster's bench balance between sides of the ball."),
+            ],
+        },
+        {
+            "category": "Bench & IR",
+            "title": "Bench Enforcement & Commissioner Drop Penalties",
+            "keywords": "bench drop penalty violation projected points 48 hours 24 hours email warning repeat infraction",
+            "controls": [
+                ft.Text("1. Notification: The commissioner will email the offending manager upon noticing an infraction."),
+                ft.Text("2. 48-Hour Grace Period: Once 48 hours pass from the infraction without a fix, the commissioner will drop the player that caused the roster violation."),
+                ft.Text("3. 24-Hour Kickoff Emergency Drop: If any player on the offending team is within 24 hours of kickoff, the commissioner has the right and will drop the bench player who has the highest projected points for the current week on that side of the ball.", color=COLOR_RED, weight=ft.FontWeight.BOLD),
+                ft.Text("4. Repeat Offenders: Rule 3 applies immediately to repeat offenders, even if no game is within 24 hours."),
+                ft.Text("5. Effective Date: Enforced beginning Week 1 once final NFL rosters and official IR designations are set."),
+            ],
+        },
+        {
+            "category": "Bench & IR",
+            "title": "Injured Reserve (IR) Slots",
+            "keywords": "ir injured reserve covid postponed slots 2 waivers fa",
+            "controls": [
+                ft.Text("• 2 total IR spots available once Yahoo designates a player as IR."),
+                ft.Text("• Eligible for Yahoo-designated IR players and NFL postponed games."),
+                ft.Text("• Players may be added directly into IR from waivers or free agency."),
+            ],
+        },
+
+        # --- 6. TRADES ---
+        {
+            "category": "Trades",
+            "title": "Draft Pick Trading & Offseason Rules",
+            "keywords": "trades draft picks max 2 offseason trade keeper deadline manual commissioner",
+            "controls": [
+                ft.Text("• Draft Pick Trades: A team may hold a maximum of two picks in any given round."),
+                ft.Text("• Offseason Trades:"),
+                ft.Text("   - Any player acquired in an offseason trade MUST be kept by the receiving team.", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
+                ft.Text("   - Must contact the commissioner directly since Yahoo offseason trades are disabled until after the draft."),
+                ft.Text("   - Pre-Keeper Deadline: Final regular-season roster carries over; all players can be traded for picks or potential keepers."),
+                ft.Text("   - Post-Keeper Deadline: Rosters cleared of all non-keepers. Only designated keepers and draft picks may be traded."),
+            ],
+        },
+        {
+            "category": "Trades",
+            "title": "Commissioner Trade Review & Collusion Policy",
+            "keywords": "trades collusion veto review fairness cheating protest commissioner standard",
+            "controls": [
+                ft.Text("• Standard for Veto: The commissioner evaluates trades solely for collusion or cheating, not subjective manager fairness. Owners are trusted to evaluate their own team needs."),
+                ft.Text("• Collusion Review: If a trade appears lopsided or involves an eliminated manager gaining nothing while helping a contender, the commissioner reserves the right to request strategic rationale before ruling."),
+                ft.Text("• Respectful Discourse: Respectful discussion is welcomed; personal attacks or disrespectful conduct can lead to franchise replacement."),
+            ],
+        },
+
+        # --- 7. POSTSEASON ---
+        {
+            "category": "Postseason",
+            "title": "Top-Scorer Playoff Exception",
+            "keywords": "postseason playoff exception top scorer most points 6th seed consolation bracket bad luck",
+            "controls": [
+                ft.Text("• Automatic 6th Seed: If the team with the most points scored during the regular season misses the playoffs due to bad luck, they automatically receive the 6th seed in the Championship Bracket.", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("• Seed Adjustment: The team that originally placed 6th is moved to the #1 seed in the Consolation Tournament."),
+            ],
+        },
+        {
+            "category": "Postseason",
+            "title": "Commissioner Expectations & League Integrity",
+            "keywords": "postseason commissioner statement expectations active abandoned polls feedback reserve list",
+            "controls": [
+                ft.Text("• Active Management: All managers pay entry fees and are expected to keep lineups active all season to preserve competitive fairness."),
+                ft.Text("• Feedback & Polls: Managers are expected to participate in annual league polls, votes, and rule discussions."),
+                ft.Text("• Re-Invitation Rights: Quitting, abandoning rosters, or failing to participate in discussions can result in franchise forfeiture to the reserve waiting list for the following season."),
+            ],
+        },
+
+        # --- 8. PAYOUTS & PRIZE POOL (FROM EXCEL) ---
+        {
+            "category": "Payouts",
+            "title": "Official League Payout Ledger & Prize Distribution",
+            "keywords": "payouts prize winnings pot money cash thursday stat corrections 1200 excel first second third 1st 2nd 3rd champion",
+            "controls": [
+                ft.Text("VI. Winnings and Payouts", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("• Entry Pot: 12 teams × $100 = $1,200 total prize pool."),
+                ft.Text("• Payout Timing: Dispersed at the earliest the Thursday following the Championship game, allowing all official NFL stat corrections to be finalized.", weight=ft.FontWeight.BOLD),
+                ft.Divider(height=10),
+                *payout_display_controls,
+            ],
+        },
+    ]
+
+    # 4. SEARCH & CHIP FILTERING
+    filtered_list = ft.Column(spacing=10)
+    current_category = ["All"]
+
+    def refresh_help_articles(query=""):
+        filtered_list.controls.clear()
+        q = query.strip().lower()
+        cat = current_category[0]
+
+        matched = []
+        for art in articles:
+            if cat != "All" and art["category"] != cat:
+                continue
+            if q:
+                match_text = (art["title"] + " " + art["keywords"] + " " + art["category"]).lower()
+                if q not in match_text:
+                    continue
+            matched.append(art)
+
+        if not matched:
+            filtered_list.controls.append(
+                ft.Container(
+                    content=ft.Text(
+                        f"No rules or articles matched '{query}'. Try searching 'sack', 'cumulative', 'PPR', 'payout', 'table', 'bench', or 'flex'.",
+                        italic=True,
+                        size=15,
+                    ),
+                    padding=15,
+                )
+            )
+        else:
+            for art in matched:
+                tile = ft.ExpansionTile(
+                    title=ft.Text(art["title"], size=16, weight=ft.FontWeight.BOLD),
+                    subtitle=ft.Text(f"Category: {art['category']}", size=12, color=ACCENT_AMBER),
+                    controls=[
+                        ft.Container(
+                            padding=15,
+                            content=ft.Column(art["controls"], spacing=8),
+                            bgcolor=BG_SURFACE_LIGHT,
+                            border_radius=8,
+                        )
+                    ],
+                )
+                filtered_list.controls.append(tile)
+
+        page.update()
+
+    txt_search = ft.TextField(
+        label="Search rules, scoring, cumulative points, keepers, payouts...",
+        hint_text="e.g. 'sack', 'cumulative', 'payout', 'offense table', 'PPR', 'bench limit'",
+        prefix_icon=ft.Icons.SEARCH,
+        expand=True,
+        on_change=lambda e: refresh_help_articles(txt_search.value),
+    )
+
+    def set_cat(cat_name):
+        current_category[0] = cat_name
+        refresh_help_articles(txt_search.value)
+
+    category_chips = ft.Row(
+        controls=[
+            ft.Button("All", on_click=lambda e: set_cat("All")),
+            ft.Button("⚙️ Setup", on_click=lambda e: set_cat("Setup")),
+            ft.Button("🎯 Scoring", on_click=lambda e: set_cat("Scoring")),
+            ft.Button("📜 Keepers", on_click=lambda e: set_cat("Keepers")),
+            ft.Button("💵 Finances", on_click=lambda e: set_cat("Finances")),
+            ft.Button("🏈 Draft", on_click=lambda e: set_cat("Draft")),
+            ft.Button("🛡️ Bench & IR", on_click=lambda e: set_cat("Bench & IR")),
+            ft.Button("🤝 Trades", on_click=lambda e: set_cat("Trades")),
+            ft.Button("🏆 Postseason", on_click=lambda e: set_cat("Postseason")),
+            ft.Button("💰 Payouts", on_click=lambda e: set_cat("Payouts")),
+        ],
+        scroll=ft.ScrollMode.ADAPTIVE,
+        spacing=8,
+    )
+
+    refresh_help_articles()
+
     return ft.ListView(
         expand=True,
-        spacing=15,
+        spacing=12,
         padding=15,
         controls=[
-            ft.Text("Official League Rules & Guidelines", size=22, weight=ft.FontWeight.BOLD),
-            ft.Card(
-                content=ft.Container(
-                    padding=15,
-                    content=ft.Column([
-                        ft.Text("League Configuration", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text("• Format: 12-Team H2H, Snake Draft (24 Rounds)"),
-                        ft.Text("• Buy-In: $100 entry fee"),
-                        ft.Text("• Keeper Deadline: Friday, August 21 (2:00 AM CDT)"),
-                        ft.Text("• Draft Date: Saturday, August 29 (7:45 PM CDT)"),
-                        ft.Text("• Waivers: FAAB bidding"),
-                    ], spacing=6),
-                )
-            ),
-            ft.Card(
-                content=ft.Container(
-                    padding=15,
-                    content=ft.Column([
-                        ft.Text("Roster & Position Constraints", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text("• Roster Size: 24 Total (15 Starters, 9 Bench)"),
-                        ft.Text("• Bench Constraint: Max 6 per side of ball (Offense, Defense, or ST)"),
-                        ft.Text("• IR Slots: 2 total (Max 1 Offense, 1 Defense)"),
-                    ], spacing=6),
-                )
-            ),
-            ft.Card(
-                content=ft.Container(
-                    padding=15,
-                    content=ft.Column([
-                        ft.Text("Keeper Roster Limits", size=18, weight=ft.FontWeight.BOLD),
-                        ft.Text("• Total Keepers: Up to 4 players"),
-                        ft.Text("• 2 Keepers: Max 1 Offense, Max 1 Defense/ST"),
-                        ft.Text("• 3 or 4 Keepers: Max 2 Offense, Max 2 Defense/ST"),
-                        ft.Text("• Rounds 1–4 Rule: Only 1 player allowed in rounds 1 through 4"),
-                        ft.Text("• Undrafted Free Agents: 13th / 12th round (Offense), 20th / 19th round (Defense)"),
-                    ], spacing=6),
-                )
-            ),
+            ft.Text("NPK Rules, Scoring & Help Center", size=22, weight=ft.FontWeight.BOLD),
+            ft.Text("Instant lookup for league scoring, cumulative point stacks, keeper tables, payouts, and commissioner rules:", italic=True),
+            txt_search,
+            category_chips,
+            ft.Divider(height=10),
+            filtered_list,
         ],
     )
 
 
 # ---------------------------------------------------------
-# MAIN APP ENTRY POINT (Pinned Header Navigation)
+# MAIN APP ENTRY POINT (Weekly Hub -> History -> Calculator -> Rules & Help)
 # ---------------------------------------------------------
 def main(page: ft.Page):
     page.title = "NPK Fantasy Football League Dashboard"
@@ -639,7 +1176,7 @@ def main(page: ft.Page):
         build_weekly_tab(page),
         build_history_tab(page),
         build_keeper_tab(page),
-        build_rules_tab(page),
+        build_help_center_tab(page),
     ]
 
     body = ft.Container(content=views[0], expand=True)
@@ -653,7 +1190,7 @@ def main(page: ft.Page):
             ft.Button("Weekly Hub", on_click=lambda e: switch_tab(0)),
             ft.Button("History Archives", on_click=lambda e: switch_tab(1)),
             ft.Button("Keeper Calculator", on_click=lambda e: switch_tab(2)),
-            ft.Button("Rules & Settings", on_click=lambda e: switch_tab(3)),
+            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(3)),
         ],
         scroll=ft.ScrollMode.ADAPTIVE,
         alignment=ft.MainAxisAlignment.CENTER,
@@ -663,11 +1200,11 @@ def main(page: ft.Page):
         ft.Column(
             controls=[
                 nav_row,
-                ft.Divider(height=8),
+                ft.Divider(height=10),
                 body,
             ],
             expand=True,
-            spacing=4,
+            spacing=5,
         )
     )
 
