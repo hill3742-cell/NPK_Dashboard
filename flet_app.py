@@ -2,7 +2,12 @@ import os
 import re
 from datetime import datetime
 import flet as ft
-from keeper_rules import calculate_keeper_cost, validate_keeper_selections
+from keeper_rules import (
+    calculate_keeper_cost,
+    calculate_traded_keeper_cost,
+    validate_keeper_selections,
+)
+from roster_data import TEAMS, DRAFT_RESULTS_2026, get_team_roster
 
 # ---------------------------------------------------------
 # DIRECTORY CONFIGURATIONS
@@ -23,18 +28,25 @@ COLOR_RED = "#e53935"
 
 
 def create_option(key: str, text: str = None):
-    """Maintains dropdown option compatibility across Flet versions."""
     label = text if text is not None else str(key)
     if hasattr(ft, "DropdownOption"):
         return ft.DropdownOption(key=str(key), text=label)
     return ft.dropdown.Option(str(key), label)
 
 
+def safe_update(control_or_page):
+    """Safely updates a control or page only if it has already been mounted to the tree."""
+    try:
+        if control_or_page and getattr(control_or_page, "page", None) is not None:
+            control_or_page.update()
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------
 # TAB 1: WEEKLY HUB (PREVIEWS & RECAPS WITH PINCH-TO-ZOOM)
 # ---------------------------------------------------------
 def get_weekly_items():
-    """Scans assets/weekly for files matching: YYYY_W{num}_(preview|recap)[_p{num}].ext"""
     items = []
     pattern = re.compile(
         r"^(\d{4})_W(?:eek)?_?(\d+)_?(preview|recap)(?:_p\d+)?\.(png|jpg|jpeg|webp|txt)$",
@@ -76,7 +88,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         new_w = int(750 * weekly_scale[0])
         for c in weekly_containers:
             c.width = new_w
-        page.update()
+        safe_update(page)
 
     weekly_zoom_bar = ft.Container(
         content=ft.Row(
@@ -118,7 +130,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
         else:
             btn_toggle_controls.text = "▼ Show Controls & Zoom Bar"
             btn_toggle_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
-        page.update()
+        safe_update(page)
 
     btn_toggle_controls.on_click = toggle_weekly_controls
 
@@ -148,10 +160,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                         pan_enabled=True,
                         scale_enabled=True,
                     )
-                    c = ft.Container(
-                        content=pinch_viewer,
-                        width=750,
-                    )
+                    c = ft.Container(content=pinch_viewer, width=750)
                     weekly_containers.append(c)
 
                     scrollable_row = ft.Row(
@@ -181,7 +190,7 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
                             border_radius=8,
                         )
                     )
-        page.update()
+        safe_update(content_display)
 
     dd_year = ft.Dropdown(label="Year", width=110)
     dd_preview = ft.Dropdown(label="Past Previews", width=160)
@@ -237,22 +246,11 @@ def build_weekly_tab(page: ft.Page) -> ft.Control:
             status_label.value = "No Previews or Recaps found for this season."
             content_display.controls.clear()
             content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
-            page.update()
+            safe_update(content_display)
 
-    def on_year_change(e):
-        populate_controls(int(dd_year.value))
-
-    dd_year.on_change = on_year_change
-    if hasattr(dd_year, "on_select"):
-        dd_year.on_select = on_year_change
-
+    dd_year.on_change = lambda e: populate_controls(int(dd_year.value))
     dd_preview.on_change = on_selection_change
-    if hasattr(dd_preview, "on_select"):
-        dd_preview.on_select = on_selection_change
-
     dd_recap.on_change = on_selection_change
-    if hasattr(dd_recap, "on_select"):
-        dd_recap.on_select = on_selection_change
 
     populate_controls()
 
@@ -298,7 +296,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         new_w = int(750 * history_scale[0])
         for c in history_containers:
             c.width = new_w
-        page.update()
+        safe_update(page)
 
     history_zoom_bar = ft.Container(
         content=ft.Row(
@@ -348,7 +346,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
         else:
             btn_toggle_history_controls.text = "▼ Show Controls & Zoom Bar"
             btn_toggle_history_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
-        page.update()
+        safe_update(page)
 
     btn_toggle_history_controls.on_click = toggle_history_controls
 
@@ -378,10 +376,7 @@ def build_history_tab(page: ft.Page) -> ft.Control:
                     pan_enabled=True,
                     scale_enabled=True,
                 )
-                c = ft.Container(
-                    content=pinch_viewer,
-                    width=750,
-                )
+                c = ft.Container(content=pinch_viewer, width=750)
                 history_containers.append(c)
 
                 scrollable_row = ft.Row(
@@ -399,15 +394,9 @@ def build_history_tab(page: ft.Page) -> ft.Control:
             history_display.controls.append(
                 ft.Text(f"No archive images found for season {year}.", italic=True, size=15)
             )
-        page.update()
+        safe_update(history_display)
 
-    def on_year_select(e):
-        load_season_images(dd_history_year.value)
-
-    dd_history_year.on_change = on_year_select
-    if hasattr(dd_history_year, "on_select"):
-        dd_history_year.on_select = on_year_select
-
+    dd_history_year.on_change = lambda e: load_season_images(dd_history_year.value)
     load_season_images("2025")
 
     fixed_top_header = ft.Column(
@@ -433,125 +422,177 @@ def build_history_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# TAB 3: KEEPER CALCULATOR & VALIDATOR
+# TAB 3: DRAFT RESULTS (SEARCHABLE & TEAM FILTERABLE)
+# ---------------------------------------------------------
+def build_draft_tab(page: ft.Page) -> ft.Control:
+    table_container = ft.Container()
+    current_team = ["All"]
+    current_search = [""]
+
+    def render_table():
+        sel_team = current_team[0]
+        q = current_search[0].strip().lower()
+
+        filtered = []
+        for r, pk, ovr, player, nfl, pos, side, f_team in DRAFT_RESULTS_2026:
+            if sel_team != "All" and f_team != sel_team:
+                continue
+            if q and q not in f"{player} {pos} {nfl} {f_team} round {r}".lower():
+                continue
+            filtered.append((r, pk, ovr, player, nfl, pos, side, f_team))
+
+        table_rows = [
+            ft.DataRow(
+                cells=[
+                    ft.DataCell(ft.Text(f"#{ovr}", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                    ft.DataCell(ft.Text(f"Rd {r}, Pick {pk}")),
+                    ft.DataCell(ft.Text(f"{player} ({nfl} - {pos})", weight=ft.FontWeight.BOLD)),
+                    ft.DataCell(ft.Text(f_team, color=COLOR_GREEN)),
+                ]
+            )
+            for r, pk, ovr, player, nfl, pos, side, f_team in filtered
+        ]
+
+        dt = ft.DataTable(
+            heading_row_color=BG_SURFACE_LIGHT,
+            columns=[
+                ft.DataColumn(ft.Text("Ovr #", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                ft.DataColumn(ft.Text("Round / Pick", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Player (NFL - Pos)", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Fantasy Team", weight=ft.FontWeight.BOLD)),
+            ],
+            rows=table_rows,
+            column_spacing=18,
+        )
+
+        table_container.content = ft.Row([dt], scroll=ft.ScrollMode.ADAPTIVE)
+
+    def on_team_change(e):
+        current_team[0] = getattr(e, "data", None) or getattr(e.control, "value", "All") or "All"
+        dd_team_filter.value = current_team[0]
+        render_table()
+        table_container.update()
+
+    def on_search_change(e):
+        current_search[0] = getattr(e, "data", None) or getattr(e.control, "value", "") or ""
+        render_table()
+        table_container.update()
+
+    dd_year = ft.Dropdown(
+        label="Draft Season",
+        options=[create_option("2026", "2026 Draft")],
+        value="2026",
+        width=140,
+    )
+    dd_team_filter = ft.Dropdown(
+        label="Filter by Team",
+        options=[create_option("All", "All Teams")] + [create_option(t) for t in TEAMS],
+        value="All",
+        width=250,
+    )
+    dd_team_filter.on_change = on_team_change
+    if hasattr(dd_team_filter, "on_select"):
+        dd_team_filter.on_select = on_team_change
+
+    txt_search = ft.TextField(
+        label="Search player, position, round...",
+        prefix_icon=ft.Icons.SEARCH,
+        width=260,
+    )
+    txt_search.on_change = on_search_change
+
+    render_table()
+
+    return ft.ListView(
+        expand=True,
+        spacing=12,
+        padding=12,
+        controls=[
+            ft.Text("NPK Draft Results & History", size=20, weight=ft.FontWeight.BOLD),
+            ft.Row([dd_year, dd_team_filter, txt_search], wrap=True, spacing=10),
+            ft.Divider(height=10),
+            table_container,
+        ],
+    )
+
+
+# ---------------------------------------------------------
+# TAB 4: KEEPER ROSTER (WITH IF-TRADED RESET COLUMN)
 # ---------------------------------------------------------
 def build_keeper_tab(page: ft.Page) -> ft.Control:
-    txt_player = ft.TextField(label="Player Name", value="Kyren Williams", expand=True)
-    dd_side = ft.Dropdown(
-        label="Side of Ball",
-        value="Offense",
-        options=[
-            create_option("Offense"),
-            create_option("Defense"),
-            create_option("Special Teams"),
-        ],
-        width=160,
-    )
-    dd_year = ft.Dropdown(
-        label="Years Kept",
-        value="1",
-        options=[
-            create_option("1", "1st Time (2nd Year)"),
-            create_option("2", "2nd Time (3rd Year)"),
-            create_option("3", "3rd+ Time (4th+ Year)"),
-        ],
-        width=200,
-    )
-    chk_undrafted = ft.Checkbox(label="Was Undrafted FA last season?", value=False)
-    rg_priority = ft.RadioGroup(
-        content=ft.Row([
-            ft.Radio(value="1", label="1st Undrafted"),
-            ft.Radio(value="2", label="2nd Undrafted"),
-        ]),
-        value="1",
-    )
-    txt_prior_round = ft.TextField(label="Prior Draft Round (1-24)", value="10", width=190)
-    lbl_calc_result = ft.Text("2026 Draft Pick Cost: Round 10", size=20, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
+    roster_container = ft.Container()
+    current_team = ["Tbone Diva Manglers"]
 
-    def calculate_cost(e=None):
-        side = dd_side.value
-        k_year = int(dd_year.value or 1)
-        is_undr = chk_undrafted.value
-        undr_prio = int(rg_priority.value or 1)
-        try:
-            p_round = int(txt_prior_round.value or 1)
-        except ValueError:
-            p_round = 1
+    def render_roster():
+        selected_team = current_team[0]
+        players = get_team_roster(selected_team)
 
-        cost = calculate_keeper_cost(
-            side="Offense" if side == "Offense" else "Defense",
-            keeper_year=k_year,
-            prior_round=p_round,
-            is_undrafted=is_undr,
-            undrafted_count=undr_prio,
-        )
-        p_name = txt_player.value.strip() or "Player"
-        lbl_calc_result.value = f"2026 Draft Pick Cost for {p_name}: Round {cost}"
-        page.update()
-
-    def on_undrafted_toggle(e):
-        txt_prior_round.disabled = chk_undrafted.value
-        rg_priority.visible = chk_undrafted.value
-        calculate_cost()
-
-    chk_undrafted.on_change = on_undrafted_toggle
-    rg_priority.visible = False
-    rg_priority.on_change = calculate_cost
-
-    dd_side.on_change = calculate_cost
-    if hasattr(dd_side, "on_select"):
-        dd_side.on_select = calculate_cost
-
-    dd_year.on_change = calculate_cost
-    if hasattr(dd_year, "on_select"):
-        dd_year.on_select = calculate_cost
-
-    txt_player.on_change = calculate_cost
-    txt_prior_round.on_change = calculate_cost
-
-    validator_result = ft.Column()
-
-    def run_validation(e=None):
-        demo_team = [
-            {"name": "Ja'Marr Chase", "side": "Offense", "cost_round": 1},
-            {"name": "Kyren Williams", "side": "Offense", "cost_round": 10},
-            {"name": "Fred Warner", "side": "Defense", "cost_round": 13},
-            {"name": "T.J. Watt", "side": "Defense", "cost_round": 4},
-        ]
-        violations = validate_keeper_selections(demo_team)
-        validator_result.controls.clear()
-        if violations:
-            for err in violations:
-                validator_result.controls.append(ft.Text(err, color=COLOR_RED, size=15))
-        else:
-            validator_result.controls.append(
-                ft.Text("✅ This sample keeper roster is 100% compliant with NPK rules!", color=COLOR_GREEN, size=15)
+        table_rows = []
+        for p in players:
+            next_cost = calculate_keeper_cost(
+                side="Offense" if p["side"] == "Offense" else "Defense",
+                current_years_on_team=p["years_kept"],
+                current_round=p["draft_round"],
+                is_undrafted=p["is_undrafted"],
             )
-        page.update()
+            traded_cost = calculate_traded_keeper_cost(p["draft_round"])
 
-    run_validation()
+            table_rows.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(f"Rd {p['draft_round']}")),
+                        ft.DataCell(ft.Text(f"{p['name']} ({p['position']})", weight=ft.FontWeight.BOLD)),
+                        ft.DataCell(ft.Text(p["side"])),
+                        ft.DataCell(ft.Text(f"Yr {p['years_kept']}")),
+                        ft.DataCell(ft.Text(f"Round {next_cost}", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                        ft.DataCell(ft.Text(f"Round {traded_cost}", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+                    ]
+                )
+            )
+
+        dt = ft.DataTable(
+            heading_row_color=BG_SURFACE_LIGHT,
+            columns=[
+                ft.DataColumn(ft.Text("2026 Draft")),
+                ft.DataColumn(ft.Text("Player Name", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Side of Ball")),
+                ft.DataColumn(ft.Text("Years Kept")),
+                ft.DataColumn(ft.Text("2027 Cost (Kept)", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                ft.DataColumn(ft.Text("If Traded (Rd)", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+            ],
+            rows=table_rows,
+            column_spacing=16,
+        )
+
+        roster_container.content = ft.Row([dt], scroll=ft.ScrollMode.ADAPTIVE)
+
+    def on_team_change(e):
+        current_team[0] = getattr(e, "data", None) or getattr(e.control, "value", "Tbone Diva Manglers") or "Tbone Diva Manglers"
+        dd_team.value = current_team[0]
+        render_roster()
+        roster_container.update()
+
+    dd_team = ft.Dropdown(
+        label="Select Franchise Roster",
+        options=[create_option(t) for t in TEAMS],
+        value="Tbone Diva Manglers",
+        width=270,
+    )
+    dd_team.on_change = on_team_change
+    if hasattr(dd_team, "on_select"):
+        dd_team.on_select = on_team_change
+
+    render_roster()
 
     return ft.ListView(
         expand=True,
         spacing=15,
         padding=15,
         controls=[
-            ft.Text("Keeper Cost Calculator", size=22, weight=ft.FontWeight.BOLD),
-            ft.Text("Calculate draft pick cost based on official NPK rules.", italic=True),
-            ft.Row([txt_player, dd_side], wrap=True),
-            ft.Row([dd_year, txt_prior_round], wrap=True),
-            chk_undrafted,
-            rg_priority,
-            ft.Container(
-                content=lbl_calc_result,
-                padding=15,
-                bgcolor=BG_SURFACE_LIGHT,
-                border_radius=8,
-            ),
-            ft.Divider(height=25),
-            ft.Text("Team Keeper Roster Validator", size=20, weight=ft.FontWeight.BOLD),
-            ft.Text("Checks max 4 keepers, offense/defense split, and Rounds 1-4 restrictions.", italic=True),
-            validator_result,
+            ft.Text("Franchise Keeper Roster & 2027 Projections", size=22, weight=ft.FontWeight.BOLD),
+            ft.Text("Official keeper pick costs vs. traded reset values (traded players reset to Year 2):", italic=True),
+            dd_team,
+            roster_container,
         ],
     )
 
@@ -599,10 +640,9 @@ def load_payouts_from_excel():
 
 
 # ---------------------------------------------------------
-# TAB 4: RULES, SCORING & HELP CENTER (SEARCHABLE)
+# TAB 5: RULES, SCORING & HELP CENTER (SEARCHABLE)
 # ---------------------------------------------------------
 def build_help_center_tab(page: ft.Page) -> ft.Control:
-    # 1. KEEPER PROGRESSION DATA TABLES
     offense_rows = [
         ("1", "1", "1", "1", "1", "1", "1", "1"),
         ("2", "2", "1", "1", "1", "1", "1", "1"),
@@ -656,12 +696,8 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 cells=[
                     ft.DataCell(ft.Text("RULE:", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
                     ft.DataCell(ft.Text("Same Round", italic=True)),
-                    ft.DataCell(ft.Text("(Prior/2)-1 or -2", italic=True, color=ACCENT_AMBER)),
-                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
-                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
-                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
-                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
-                    ft.DataCell(ft.Text("Prior - 2", italic=True)),
+                    ft.DataCell(ft.Text("Round - ((Round/2) + 1 or + 2)", italic=True, color=ACCENT_AMBER)),
+                    *[ft.DataCell(ft.Text("Prior - 2", italic=True)) for _ in range(5)],
                 ],
             )
         ],
@@ -724,7 +760,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 cells=[
                     ft.DataCell(ft.Text("RULE:", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
                     ft.DataCell(ft.Text("Same Round", italic=True)),
-                    ft.DataCell(ft.Text("Prior-(P/4)-1/2", italic=True, color=ACCENT_AMBER)),
+                    ft.DataCell(ft.Text("Round - ((Round/4) + 1 or + 2)", italic=True, color=ACCENT_AMBER)),
                     *[ft.DataCell(ft.Text("Prior - 2", italic=True)) for _ in range(8)],
                 ],
             )
@@ -732,7 +768,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         column_spacing=12,
     )
 
-    # 2. OFFICIAL PAYOUT TABLE (SYNCED WITH WORKSHEET)
     dt_official_payout = ft.DataTable(
         heading_row_color=BG_SURFACE_LIGHT,
         columns=[
@@ -794,7 +829,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ft.Row([dt_excel], scroll=ft.ScrollMode.ADAPTIVE),
         ]
 
-    # 3. INTERACTIVE DRAFT POSITION BUILDER (DEFAULT CONSOLATION CHAMP TO #1)
     dt_draft_reference = ft.DataTable(
         heading_row_color=BG_SURFACE_LIGHT,
         columns=[
@@ -875,7 +909,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         )
 
         draft_board_column.controls.append(ft.Row([dt_simulated_board], scroll=ft.ScrollMode.ADAPTIVE))
-        page.update()
+        safe_update(draft_board_column)
 
     dd_champ_choice = ft.Dropdown(
         label="Consolation Champ Selected Slot (Default: #1)",
@@ -884,12 +918,8 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         width=260,
     )
     dd_champ_choice.on_change = lambda e: update_draft_board(dd_champ_choice.value)
-    if hasattr(dd_champ_choice, "on_select"):
-        dd_champ_choice.on_select = lambda e: update_draft_board(dd_champ_choice.value)
-
     update_draft_board("1")
 
-    # 4. ANNUAL DIVISION REALIGNMENT BUILDER (THE BAD VS. THE UGLY)
     dt_div_rules = ft.DataTable(
         heading_row_color=BG_SURFACE_LIGHT,
         columns=[
@@ -909,7 +939,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         column_spacing=18,
     )
 
-    # Current sample standings for live in-season preview
     current_league_teams = [
         (1, "TBone Diva Manglers"),
         (2, "Samurai"),
@@ -918,7 +947,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         (5, "RAZINUDOWN"),
         (6, "Wild Card"),
         (7, "SilentXecution"),
-        (8, "Ninja"),
+        (8, "ninja"),
         (9, "The Cinderella Boyz"),
         (10, "The Mad Scientist Syndicate"),
         (11, "Super Saiyan"),
@@ -960,9 +989,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         column_spacing=18,
     )
 
-    # 5. KNOWLEDGE BASE ARTICLES (STRICT GROUPING & ORDERING)
     articles = [
-        # --- 1. LEAGUE SETUP ---
         {
             "category": "Setup",
             "title": "League Structure & Format",
@@ -1036,8 +1063,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Consolation Tournament: 6 non-playoff teams compete for the #1 draft pick choice privilege."),
             ],
         },
-
-        # --- 2. POSITION SCORING (INDIVIDUAL POSITIONS FIRST) ---
         {
             "category": "Scoring",
             "title": "Quarterback (QB) Scoring",
@@ -1141,8 +1166,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Touchdowns: Defensive TD (6 pts); Extra Point Returned (2 pts); Turnover Return (15 yds/pt)."),
             ],
         },
-
-        # --- 2B. CUMULATIVE & STACKING SCORING (DIRECTLY AFTER INDIVIDUAL POSITIONS) ---
         {
             "category": "Scoring",
             "title": "Cumulative & Stacking Points (Sacks, Big Plays & 40+ Bonuses)",
@@ -1168,8 +1191,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Fumbles Lost: Fumble (-0.5) + Fumble Lost (-2.0) = -2.5 pts total."),
             ],
         },
-
-        # --- 3. KEEPERS & RECREATED TABLES ---
         {
             "category": "Keepers",
             "title": "Official Offense Keeper Table (8-Year Progression)",
@@ -1214,13 +1235,11 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("   - Offense: 13th round (1st kept), 12th round (2nd kept)."),
                 ft.Text("   - Defense: 20th round (1st kept), 19th round (2nd kept)."),
                 ft.Text("• 2nd Year as Keeper (3rd Year on Team):"),
-                ft.Text("   - Offense: (Prior Round / 2) - 1 (if prior 1-14) or - 2 (if prior 15-24). Round down."),
-                ft.Text("   - Defense: Prior Round - (Prior / 4) - 1 (if prior 1-13) or - 2 (if prior 14-24). Round down."),
+                ft.Text("   - Offense: Round - ((Round / 2) + 1) [Rounds 1-14] or + 2 [Rounds 15-24]. Round to later round."),
+                ft.Text("   - Defense: Round - ((Round / 4) + 1) [Rounds 1-13] or + 2 [Rounds 14-24]. Round to later round."),
                 ft.Text("• 3rd+ Time Kept (4th+ Year on Team): Subtract 2 from prior round (Floor = Round 1)."),
             ],
         },
-
-        # --- 4. FINANCES & DRAFT ---
         {
             "category": "Finances",
             "title": "Entry Fees, Deadlines & Guarantee Policy",
@@ -1259,8 +1278,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 draft_board_column,
             ],
         },
-
-        # --- 5. BENCH & IR ---
         {
             "category": "Bench & IR",
             "title": "Bench Capacity & Positional Limit (Max 6 Per Side)",
@@ -1293,8 +1310,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Players may be added directly into IR from waivers or free agency."),
             ],
         },
-
-        # --- 6. TRADES ---
         {
             "category": "Trades",
             "title": "Draft Pick Trading & Offseason Rules",
@@ -1318,8 +1333,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Respectful Discourse: Respectful discussion is welcomed; personal attacks or disrespectful conduct can lead to franchise replacement."),
             ],
         },
-
-        # --- 7. POSTSEASON ---
         {
             "category": "Postseason",
             "title": "Top-Scorer Playoff Exception",
@@ -1339,8 +1352,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Re-Invitation Rights: Quitting, abandoning rosters, or failing to participate in discussions can result in franchise forfeiture to the reserve waiting list for the following season."),
             ],
         },
-
-        # --- 8. PAYOUTS & PRIZE DISTRIBUTION ---
         {
             "category": "Payouts",
             "title": "Official League Payout Ledger & Prize Distribution",
@@ -1358,7 +1369,6 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         },
     ]
 
-    # 6. SEARCH & CHIP FILTERING
     filtered_list = ft.Column(spacing=10)
     current_category = ["All"]
 
@@ -1404,7 +1414,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 )
                 filtered_list.controls.append(tile)
 
-        page.update()
+        safe_update(filtered_list)
 
     txt_search = ft.TextField(
         label="Search rules, scoring, divisions, draft order, keepers, payouts...",
@@ -1457,7 +1467,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         else:
             btn_toggle_help_controls.text = "▼ Show Search & Categories"
             btn_toggle_help_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
-        page.update()
+        safe_update(page)
 
     btn_toggle_help_controls.on_click = toggle_help_controls
 
@@ -1492,7 +1502,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# MAIN APP ENTRY POINT (WITH MASTER HEADER COLLAPSE TOGGLE)
+# MAIN APP ENTRY POINT (ORDER: Weekly, History, Draft, Keeper, Rules)
 # ---------------------------------------------------------
 def main(page: ft.Page):
     page.title = "NPK Fantasy Football League Dashboard"
@@ -1502,6 +1512,7 @@ def main(page: ft.Page):
     views = [
         build_weekly_tab(page),
         build_history_tab(page),
+        build_draft_tab(page),
         build_keeper_tab(page),
         build_help_center_tab(page),
     ]
@@ -1516,8 +1527,9 @@ def main(page: ft.Page):
         controls=[
             ft.Button("Weekly Hub", on_click=lambda e: switch_tab(0)),
             ft.Button("History Archives", on_click=lambda e: switch_tab(1)),
-            ft.Button("Keeper Calculator", on_click=lambda e: switch_tab(2)),
-            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(3)),
+            ft.Button("Draft Results", on_click=lambda e: switch_tab(2)),
+            ft.Button("Keeper Roster", on_click=lambda e: switch_tab(3)),
+            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(4)),
         ],
         scroll=ft.ScrollMode.ADAPTIVE,
         alignment=ft.MainAxisAlignment.CENTER,
