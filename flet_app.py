@@ -557,7 +557,7 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# EXCEL PAYOUT READER (2026 Fantasy Football Payouts.xlsm)
+# EXCEL PAYOUT READER (FALLBACK & DYNAMIC WORKBOOK SYNC)
 # ---------------------------------------------------------
 def load_payouts_from_excel():
     possible_names = [
@@ -573,7 +573,7 @@ def load_payouts_from_excel():
             break
 
     if not target_file:
-        return None, "File '2026 Fantasy Football Payouts.xlsm' not found in workspace directory."
+        return None, None
 
     try:
         import openpyxl
@@ -595,14 +595,14 @@ def load_payouts_from_excel():
 
         return {"filename": target_file, "sheet": target_sheet, "rows": rows}, None
     except Exception as err:
-        return None, f"Could not parse Excel workbook: {err}"
+        return None, str(err)
 
 
 # ---------------------------------------------------------
 # TAB 4: RULES, SCORING & HELP CENTER (SEARCHABLE)
 # ---------------------------------------------------------
 def build_help_center_tab(page: ft.Page) -> ft.Control:
-    # 1. KEEPER DATA MATRICES (OFFENSE & DEFENSE)
+    # 1. KEEPER PROGRESSION DATA TABLES
     offense_rows = [
         ("1", "1", "1", "1", "1", "1", "1", "1"),
         ("2", "2", "1", "1", "1", "1", "1", "1"),
@@ -732,10 +732,38 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         column_spacing=12,
     )
 
-    # 2. LOAD EXCEL PAYOUT TABLE
-    payout_info, payout_err = load_payouts_from_excel()
-    payout_display_controls = []
+    # 2. OFFICIAL PAYOUT TABLE (SYNCED WITH WORKSHEET)
+    dt_official_payout = ft.DataTable(
+        heading_row_color=BG_SURFACE_LIGHT,
+        columns=[
+            ft.DataColumn(ft.Text("Category / Award", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+            ft.DataColumn(ft.Text("Payout Amount", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+            ft.DataColumn(ft.Text("Play Type / Qualification Rules", weight=ft.FontWeight.BOLD)),
+        ],
+        rows=[
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Super Bowl Winner", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("$500.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Postseason Champion"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Season Point Leader", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("$215.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Regular Season play only"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Top Offense Bonus")), ft.DataCell(ft.Text("$75.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Regular Season play only"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Top Defense Bonus")), ft.DataCell(ft.Text("$75.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Regular Season play only"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Top Special Teams Bonus")), ft.DataCell(ft.Text("$25.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Regular Season play only"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Weekly Highest Points Winner")), ft.DataCell(ft.Text("$10.00 / wk", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Regular Season play only"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Playoffs (Round 1) Bonus")), ft.DataCell(ft.Text("$10.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Rewarded by clinching Round 1"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Playoffs (Round 2) Bonus")), ft.DataCell(ft.Text("$15.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Rewarded by clinching Round 2"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Playoffs (Round 3) Bonus")), ft.DataCell(ft.Text("$25.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Rewarded by clinching Round 3"))]),
+            ft.DataRow(
+                color=BG_SURFACE_LIGHT,
+                cells=[
+                    ft.DataCell(ft.Text("TOTAL PRIZE POT", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                    ft.DataCell(ft.Text("$1,200.00", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)),
+                    ft.DataCell(ft.Text("12 Players × $100 Entry Fee", weight=ft.FontWeight.BOLD)),
+                ],
+            ),
+        ],
+        column_spacing=18,
+    )
 
+    payout_info, _ = load_payouts_from_excel()
+    excel_live_display = []
     if payout_info and payout_info.get("rows"):
         p_rows = payout_info["rows"]
         headers = [str(c) if str(c) != "" else f"Col {idx+1}" for idx, c in enumerate(p_rows[0])]
@@ -754,37 +782,19 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.DataRow(cells=[ft.DataCell(ft.Text(str(val))) for val in padded_row[:max_cols]])
             )
 
-        dt_payout = ft.DataTable(
+        dt_excel = ft.DataTable(
             heading_row_color=BG_SURFACE_LIGHT,
             columns=columns,
             rows=payout_data_rows,
             column_spacing=15,
         )
-
-        payout_display_controls = [
-            ft.Text(f"📊 Live Data Loaded from Sheet: '{payout_info['sheet']}'", color=COLOR_GREEN, weight=ft.FontWeight.BOLD),
-            ft.Row([dt_payout], scroll=ft.ScrollMode.ADAPTIVE),
-        ]
-    else:
-        payout_display_controls = [
-            ft.Text(f"Notice: {payout_err or 'Place 2026 Fantasy Football Payouts.xlsm in folder to load dynamic ledger.'}", italic=True),
-            ft.DataTable(
-                heading_row_color=BG_SURFACE_LIGHT,
-                columns=[
-                    ft.DataColumn(ft.Text("Finish / Award", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
-                    ft.DataColumn(ft.Text("Official Payout", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
-                ],
-                rows=[
-                    ft.DataRow(cells=[ft.DataCell(ft.Text("1st Place (Super Bowl Champion)")), ft.DataCell(ft.Text("$600.00", weight=ft.FontWeight.BOLD))]),
-                    ft.DataRow(cells=[ft.DataCell(ft.Text("2nd Place (Super Bowl Runner-Up)")), ft.DataCell(ft.Text("$300.00", weight=ft.FontWeight.BOLD))]),
-                    ft.DataRow(cells=[ft.DataCell(ft.Text("3rd Place Winner")), ft.DataCell(ft.Text("$100.00", weight=ft.FontWeight.BOLD))]),
-                    ft.DataRow(cells=[ft.DataCell(ft.Text("Regular Season Most Points")), ft.DataCell(ft.Text("$100.00", weight=ft.FontWeight.BOLD))]),
-                    ft.DataRow(cells=[ft.DataCell(ft.Text("Division Winners / Weekly Highs")), ft.DataCell(ft.Text("$100.00", weight=ft.FontWeight.BOLD))]),
-                ],
-            ),
+        excel_live_display = [
+            ft.Divider(height=15),
+            ft.Text(f"📊 Live Workbook Ledger (Sheet: '{payout_info['sheet']}'):", color=COLOR_GREEN, weight=ft.FontWeight.BOLD),
+            ft.Row([dt_excel], scroll=ft.ScrollMode.ADAPTIVE),
         ]
 
-    # 3. KNOWLEDGE BASE ARTICLES
+    # 3. KNOWLEDGE BASE ARTICLES (STRICT GROUPING & ORDERING)
     articles = [
         # --- 1. LEAGUE SETUP ---
         {
@@ -834,7 +844,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ],
         },
 
-        # --- 2. POSITION SCORING ---
+        # --- 2. POSITION SCORING (INDIVIDUAL POSITIONS FIRST) ---
         {
             "category": "Scoring",
             "title": "Quarterback (QB) Scoring",
@@ -939,7 +949,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ],
         },
 
-        # --- 2B. CUMULATIVE & STACKING SCORING ---
+        # --- 2B. CUMULATIVE & STACKING SCORING (DIRECTLY AFTER INDIVIDUAL POSITIONS) ---
         {
             "category": "Scoring",
             "title": "Cumulative & Stacking Points (Sacks, Big Plays & 40+ Bonuses)",
@@ -1122,17 +1132,20 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ],
         },
 
-        # --- 8. PAYOUTS & PRIZE POOL (FROM EXCEL) ---
+        # --- 8. PAYOUTS & PRIZE DISTRIBUTION ---
         {
             "category": "Payouts",
             "title": "Official League Payout Ledger & Prize Distribution",
-            "keywords": "payouts prize winnings pot money cash thursday stat corrections 1200 excel first second third 1st 2nd 3rd champion",
+            "keywords": "payouts prize winnings pot money cash thursday stat corrections 1200 excel first second third 1st 2nd 3rd champion super bowl bonus",
             "controls": [
-                ft.Text("VI. Winnings and Payouts", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
-                ft.Text("• Entry Pot: 12 teams × $100 = $1,200 total prize pool."),
-                ft.Text("• Payout Timing: Dispersed at the earliest the Thursday following the Championship game, allowing all official NFL stat corrections to be finalized.", weight=ft.FontWeight.BOLD),
+                ft.Text("VI. Winnings and Payout Schedule", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("• Buy-In & Pot: 12 Players × $100 = $1,200.00 Total Pot.", weight=ft.FontWeight.BOLD),
+                ft.Text("• Disbursement Timing: All winnings are paid following the last week of the season (at the earliest the Thursday following the Championship game to finalize all official NFL stat corrections)."),
+                ft.Text("• Regular Season Rules: Season Point Leader, Top Offense, Top Defense, Top Special Teams, & Weekly Highest Points are for Regular Season play only.", color=COLOR_GREEN),
+                ft.Text("• Playoff Bonus Rules: Playoff Round Bonuses are rewarded by clinching that round.", color=COLOR_GREEN),
                 ft.Divider(height=10),
-                *payout_display_controls,
+                ft.Row([dt_official_payout], scroll=ft.ScrollMode.ADAPTIVE),
+                *excel_live_display,
             ],
         },
     ]
@@ -1271,7 +1284,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# MAIN APP ENTRY POINT (WITH GLOBAL HEADER COLLAPSE TOGGLE)
+# MAIN APP ENTRY POINT (WITH MASTER HEADER COLLAPSE TOGGLE)
 # ---------------------------------------------------------
 def main(page: ft.Page):
     page.title = "NPK Fantasy Football League Dashboard"
