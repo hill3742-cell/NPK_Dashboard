@@ -794,7 +794,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ft.Row([dt_excel], scroll=ft.ScrollMode.ADAPTIVE),
         ]
 
-    # 3. INTERACTIVE DRAFT POSITION BUILDER & SHIFT SIMULATOR
+    # 3. INTERACTIVE DRAFT POSITION BUILDER (DEFAULT CONSOLATION CHAMP TO #1)
     dt_draft_reference = ft.DataTable(
         heading_row_color=BG_SURFACE_LIGHT,
         columns=[
@@ -803,7 +803,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ft.DataColumn(ft.Text("Selection / Shifting Rule", weight=ft.FontWeight.BOLD)),
         ],
         rows=[
-            ft.DataRow(cells=[ft.DataCell(ft.Text("7th (Consolation Champ)", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("1 - 12", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Can choose any position; all other teams shift accordingly."))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("7th (Consolation Champ)", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("1 - 12 (Default: #1)", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Can choose any position; all other teams shift accordingly."))]),
             ft.DataRow(cells=[ft.DataCell(ft.Text("8th")), ft.DataCell(ft.Text("1 or 2")), ft.DataCell(ft.Text("1st available non-champ slot"))]),
             ft.DataRow(cells=[ft.DataCell(ft.Text("9th")), ft.DataCell(ft.Text("2 or 3")), ft.DataCell(ft.Text("2nd available non-champ slot"))]),
             ft.DataRow(cells=[ft.DataCell(ft.Text("10th")), ft.DataCell(ft.Text("3 or 4")), ft.DataCell(ft.Text("3rd available non-champ slot"))]),
@@ -821,11 +821,11 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
 
     draft_board_column = ft.Column(spacing=6)
 
-    def update_draft_board(champ_choice_str):
+    def update_draft_board(champ_choice_str="1"):
         draft_board_column.controls.clear()
         try:
             choice = int(champ_choice_str)
-        except ValueError:
+        except (ValueError, TypeError):
             choice = 1
 
         ordered_ranks = [
@@ -844,7 +844,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
 
         board = [None] * 12
         champ_idx = max(0, min(11, choice - 1))
-        board[champ_idx] = ("7th Place (Consolation Champion)", "Chose this exact draft slot!", True)
+        board[champ_idx] = ("7th Place (Consolation Champion)", "Defaulted / Chosen Slot", True)
 
         team_idx = 0
         for slot_idx in range(12):
@@ -878,10 +878,10 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         page.update()
 
     dd_champ_choice = ft.Dropdown(
-        label="Consolation Champ Selected Slot",
+        label="Consolation Champ Selected Slot (Default: #1)",
         value="1",
-        options=[create_option(str(i), f"Draft Slot #{i}") for i in range(1, 13)],
-        width=240,
+        options=[create_option(str(i), f"Draft Slot #{i}" + (" (Default)" if i == 1 else "")) for i in range(1, 13)],
+        width=260,
     )
     dd_champ_choice.on_change = lambda e: update_draft_board(dd_champ_choice.value)
     if hasattr(dd_champ_choice, "on_select"):
@@ -889,7 +889,78 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
 
     update_draft_board("1")
 
-    # 4. KNOWLEDGE BASE ARTICLES (STRICT GROUPING & ORDERING)
+    # 4. ANNUAL DIVISION REALIGNMENT BUILDER (THE BAD VS. THE UGLY)
+    dt_div_rules = ft.DataTable(
+        heading_row_color=BG_SURFACE_LIGHT,
+        columns=[
+            ft.DataColumn(ft.Text("Step #", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+            ft.DataColumn(ft.Text("Team Ranks Paired", weight=ft.FontWeight.BOLD)),
+            ft.DataColumn(ft.Text("Assigned Division", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+            ft.DataColumn(ft.Text("Rationale / Pairing Context", weight=ft.FontWeight.BOLD)),
+        ],
+        rows=[
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Step 1")), ft.DataCell(ft.Text("#1 & #7", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("THE BAD", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Super Bowl Champ & Consolation Champ"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Step 2")), ft.DataCell(ft.Text("#2 & #3", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("THE UGLY", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Super Bowl Runner-Up & 3rd Place"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Step 3")), ft.DataCell(ft.Text("#4 & #5", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("THE BAD", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("4th & 5th Place Finishers"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Step 4")), ft.DataCell(ft.Text("#6 & #8", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("THE UGLY", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("6th Place & Consolation Runner-Up"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Step 5")), ft.DataCell(ft.Text("#9 & #10", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("THE BAD", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("9th & 10th Place Finishers"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Step 6")), ft.DataCell(ft.Text("#11 & #12", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("THE UGLY", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Bottom Two Finishers (11th & 12th)"))]),
+        ],
+        column_spacing=18,
+    )
+
+    # Current sample standings for live in-season preview
+    current_league_teams = [
+        (1, "TBone Diva Manglers"),
+        (2, "Samurai"),
+        (3, "MotorBoaters"),
+        (4, "Jack Wagons"),
+        (5, "RAZINUDOWN"),
+        (6, "Wild Card"),
+        (7, "SilentXecution"),
+        (8, "Ninja"),
+        (9, "The Cinderella Boyz"),
+        (10, "The Mad Scientist Syndicate"),
+        (11, "Super Saiyan"),
+        (12, "TD Master"),
+    ]
+
+    the_bad_ranks = [1, 4, 5, 7, 9, 10]
+    the_ugly_ranks = [2, 3, 6, 8, 11, 12]
+
+    dt_the_bad = ft.DataTable(
+        heading_row_color=BG_SURFACE_LIGHT,
+        columns=[
+            ft.DataColumn(ft.Text("Rank", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+            ft.DataColumn(ft.Text("Team Name (The Bad)", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+        ],
+        rows=[
+            ft.DataRow(cells=[
+                ft.DataCell(ft.Text(f"#{r}", weight=ft.FontWeight.BOLD)),
+                ft.DataCell(ft.Text(next((name for rank, name in current_league_teams if rank == r), f"Rank {r}"))),
+            ])
+            for r in the_bad_ranks
+        ],
+        column_spacing=18,
+    )
+
+    dt_the_ugly = ft.DataTable(
+        heading_row_color=BG_SURFACE_LIGHT,
+        columns=[
+            ft.DataColumn(ft.Text("Rank", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+            ft.DataColumn(ft.Text("Team Name (The Ugly)", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+        ],
+        rows=[
+            ft.DataRow(cells=[
+                ft.DataCell(ft.Text(f"#{r}", weight=ft.FontWeight.BOLD)),
+                ft.DataCell(ft.Text(next((name for rank, name in current_league_teams if rank == r), f"Rank {r}"))),
+            ])
+            for r in the_ugly_ranks
+        ],
+        column_spacing=18,
+    )
+
+    # 5. KNOWLEDGE BASE ARTICLES (STRICT GROUPING & ORDERING)
     articles = [
         # --- 1. LEAGUE SETUP ---
         {
@@ -897,10 +968,37 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             "title": "League Structure & Format",
             "keywords": "setup format 12 teams divisions head to head h2h scoring week 1 fractional negative yahoo",
             "controls": [
-                ft.Text("• League Size: 12 Teams across 2 Divisions."),
+                ft.Text("• League Size: 12 Teams across 2 Divisions (The Bad & The Ugly)."),
                 ft.Text("• Format: Head-to-Head weekly matchups beginning Week 1."),
                 ft.Text("• Scoring Modifiers: Fractional and negative points active across all positions."),
                 ft.Text("• Can't Cut List: None (commissioner and managers retain full roster control)."),
+            ],
+        },
+        {
+            "category": "Setup",
+            "title": "Annual Division Realignment (The Bad vs. The Ugly)",
+            "keywords": "setup division divisions realignment building bad ugly ranks 1 4 5 7 9 10 2 3 6 8 11 12 pairing",
+            "controls": [
+                ft.Text("Official Division Building Rules (6-Step System)", size=17, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("Each season, the two divisions are realigned based on the final end-of-year standings using this balanced pairing system:"),
+                ft.Row([dt_div_rules], scroll=ft.ScrollMode.ADAPTIVE),
+                ft.Divider(height=15),
+                ft.Text("Live In-Season Realignment Projection (Based on Current Ranks)", size=17, weight=ft.FontWeight.BOLD, color=COLOR_GREEN),
+                ft.Text("Updates live through the season based on current league standings (Syncs automatically once Yahoo is connected):", italic=True),
+                ft.Row(
+                    [
+                        ft.Column([
+                            ft.Text("DIVISION 1: THE BAD (Sum of Ranks = 36)", size=15, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                            dt_the_bad,
+                        ], spacing=6),
+                        ft.Column([
+                            ft.Text("DIVISION 2: THE UGLY (Sum of Ranks = 42)", size=15, weight=ft.FontWeight.BOLD, color=COLOR_GREEN),
+                            dt_the_ugly,
+                        ], spacing=6),
+                    ],
+                    wrap=True,
+                    spacing=20,
+                ),
             ],
         },
         {
@@ -1141,7 +1239,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             "controls": [
                 ft.Text("• Draft Format: Snake style draft (24 rounds)."),
                 ft.Text("• Annual Schedule: Draft times and dates are set each season by the commissioner, published directly inside the app, and texted to all team managers."),
-                ft.Text("• Consolation Champion Privilege: The Winner of the Consolation Tournament receives the choice of their draft position (deadline to select is typically one week prior to the draft).", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
+                ft.Text("• Consolation Champion Privilege: The Winner of the Consolation Tournament receives the choice of their draft position (deadline to select is typically one week prior to the draft). Defaults to #1 overall pick.", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
                 ft.Text("• Consolation Ranks (Picks 2–6): The remaining 5 consolation tournament participants fill the next highest available draft positions based on rank."),
                 ft.Text("• Championship Finishers (Picks 7–12): Championship bracket participants draft in the lowest 6 slots based on final playoff finish (12th: Super Bowl Winner; 11th: Runner-Up; 9th/10th: 3rd place game; 7th/8th: 5th place game)."),
             ],
@@ -1149,14 +1247,14 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         {
             "category": "Draft",
             "title": "Draft Position Builder & Standings Shift Simulator",
-            "keywords": "draft position builder shift consolation champ choice 1-12 simulator standings order board",
+            "keywords": "draft position builder shift consolation champ choice 1-12 simulator standings order board pick 1",
             "controls": [
                 ft.Text("Official Draft Position Determination Table", size=17, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
-                ft.Text("The 7th-Place Consolation Champion can choose ANY position from 1 to 12. All other teams shift into the remaining slots in strict order:", italic=True),
+                ft.Text("The 7th-Place Consolation Champion can choose ANY position from 1 to 12 (Defaults to #1). All other teams shift into the remaining slots in strict order:", italic=True),
                 ft.Row([dt_draft_reference], scroll=ft.ScrollMode.ADAPTIVE),
                 ft.Divider(height=15),
                 ft.Text("Interactive Draft Order Simulator", size=17, weight=ft.FontWeight.BOLD, color=COLOR_GREEN),
-                ft.Text("Select which slot the Consolation Champ picks to preview the exact resulting 1–12 draft order:"),
+                ft.Text("Select which slot the Consolation Champ picks (Defaults to #1; only changes if alternate slot is chosen):"),
                 dd_champ_choice,
                 draft_board_column,
             ],
@@ -1260,7 +1358,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         },
     ]
 
-    # 5. SEARCH & CHIP FILTERING
+    # 6. SEARCH & CHIP FILTERING
     filtered_list = ft.Column(spacing=10)
     current_category = ["All"]
 
@@ -1283,7 +1381,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             filtered_list.controls.append(
                 ft.Container(
                     content=ft.Text(
-                        f"No rules or articles matched '{query}'. Try searching 'draft position', 'sack', 'cumulative', 'payout', or 'keeper'.",
+                        f"No rules or articles matched '{query}'. Try searching 'bad', 'ugly', 'draft', 'sack', 'payout', or 'keeper'.",
                         italic=True,
                         size=15,
                     ),
@@ -1309,8 +1407,8 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         page.update()
 
     txt_search = ft.TextField(
-        label="Search rules, scoring, draft order, keepers, payouts...",
-        hint_text="e.g. 'draft position', 'sack', 'cumulative', 'payout', 'offense table', 'PPR'",
+        label="Search rules, scoring, divisions, draft order, keepers, payouts...",
+        hint_text="e.g. 'bad', 'ugly', 'draft position', 'sack', 'payout', 'offense table', 'PPR'",
         prefix_icon=ft.Icons.SEARCH,
         expand=True,
         on_change=lambda e: refresh_help_articles(txt_search.value),
