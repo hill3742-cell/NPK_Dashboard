@@ -794,7 +794,102 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ft.Row([dt_excel], scroll=ft.ScrollMode.ADAPTIVE),
         ]
 
-    # 3. KNOWLEDGE BASE ARTICLES (STRICT GROUPING & ORDERING)
+    # 3. INTERACTIVE DRAFT POSITION BUILDER & SHIFT SIMULATOR
+    dt_draft_reference = ft.DataTable(
+        heading_row_color=BG_SURFACE_LIGHT,
+        columns=[
+            ft.DataColumn(ft.Text("Ranked Team", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+            ft.DataColumn(ft.Text("Draft Slot Range", weight=ft.FontWeight.BOLD, color=COLOR_GREEN)),
+            ft.DataColumn(ft.Text("Selection / Shifting Rule", weight=ft.FontWeight.BOLD)),
+        ],
+        rows=[
+            ft.DataRow(cells=[ft.DataCell(ft.Text("7th (Consolation Champ)", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("1 - 12", color=COLOR_GREEN, weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("Can choose any position; all other teams shift accordingly."))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("8th")), ft.DataCell(ft.Text("1 or 2")), ft.DataCell(ft.Text("1st available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("9th")), ft.DataCell(ft.Text("2 or 3")), ft.DataCell(ft.Text("2nd available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("10th")), ft.DataCell(ft.Text("3 or 4")), ft.DataCell(ft.Text("3rd available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("11th")), ft.DataCell(ft.Text("4 or 5")), ft.DataCell(ft.Text("4th available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("12th")), ft.DataCell(ft.Text("5 or 6")), ft.DataCell(ft.Text("5th available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("2nd (Super Bowl Runner-Up)")), ft.DataCell(ft.Text("6 or 7")), ft.DataCell(ft.Text("6th available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("3rd")), ft.DataCell(ft.Text("7 or 8")), ft.DataCell(ft.Text("7th available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("4th")), ft.DataCell(ft.Text("8 or 9")), ft.DataCell(ft.Text("8th available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("5th")), ft.DataCell(ft.Text("9 or 10")), ft.DataCell(ft.Text("9th available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("6th")), ft.DataCell(ft.Text("10 or 11")), ft.DataCell(ft.Text("10th available non-champ slot"))]),
+            ft.DataRow(cells=[ft.DataCell(ft.Text("1st (Super Bowl Champ)", weight=ft.FontWeight.BOLD)), ft.DataCell(ft.Text("11 or 12", color=ACCENT_AMBER)), ft.DataCell(ft.Text("Last available non-champ slot"))]),
+        ],
+        column_spacing=18,
+    )
+
+    draft_board_column = ft.Column(spacing=6)
+
+    def update_draft_board(champ_choice_str):
+        draft_board_column.controls.clear()
+        try:
+            choice = int(champ_choice_str)
+        except ValueError:
+            choice = 1
+
+        ordered_ranks = [
+            ("8th Place", "Consolation Participant"),
+            ("9th Place", "Consolation Participant"),
+            ("10th Place", "Consolation Participant"),
+            ("11th Place", "Consolation Participant"),
+            ("12th Place", "Consolation Participant"),
+            ("2nd Place", "Super Bowl Runner-Up"),
+            ("3rd Place", "Playoff Semifinalist"),
+            ("4th Place", "Playoff Semifinalist"),
+            ("5th Place", "Playoff Quarterfinalist"),
+            ("6th Place", "Playoff Quarterfinalist"),
+            ("1st Place", "Super Bowl Champion"),
+        ]
+
+        board = [None] * 12
+        champ_idx = max(0, min(11, choice - 1))
+        board[champ_idx] = ("7th Place (Consolation Champion)", "Chose this exact draft slot!", True)
+
+        team_idx = 0
+        for slot_idx in range(12):
+            if board[slot_idx] is None:
+                r_title, r_desc = ordered_ranks[team_idx]
+                board[slot_idx] = (r_title, r_desc, False)
+                team_idx += 1
+
+        dt_simulated_board = ft.DataTable(
+            heading_row_color=BG_SURFACE_LIGHT,
+            columns=[
+                ft.DataColumn(ft.Text("Draft Slot #", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)),
+                ft.DataColumn(ft.Text("Team Entitled to Pick", weight=ft.FontWeight.BOLD)),
+                ft.DataColumn(ft.Text("Shift Status / Context", weight=ft.FontWeight.BOLD)),
+            ],
+            rows=[
+                ft.DataRow(
+                    color=BG_SURFACE_LIGHT if is_champ else None,
+                    cells=[
+                        ft.DataCell(ft.Text(f"Pick #{i+1}", weight=ft.FontWeight.BOLD, color=ACCENT_AMBER if is_champ else None)),
+                        ft.DataCell(ft.Text(team_title, weight=ft.FontWeight.BOLD if is_champ else None, color=COLOR_GREEN if is_champ else None)),
+                        ft.DataCell(ft.Text(desc, italic=True)),
+                    ]
+                )
+                for i, (team_title, desc, is_champ) in enumerate(board)
+            ],
+            column_spacing=18,
+        )
+
+        draft_board_column.controls.append(ft.Row([dt_simulated_board], scroll=ft.ScrollMode.ADAPTIVE))
+        page.update()
+
+    dd_champ_choice = ft.Dropdown(
+        label="Consolation Champ Selected Slot",
+        value="1",
+        options=[create_option(str(i), f"Draft Slot #{i}") for i in range(1, 13)],
+        width=240,
+    )
+    dd_champ_choice.on_change = lambda e: update_draft_board(dd_champ_choice.value)
+    if hasattr(dd_champ_choice, "on_select"):
+        dd_champ_choice.on_select = lambda e: update_draft_board(dd_champ_choice.value)
+
+    update_draft_board("1")
+
+    # 4. KNOWLEDGE BASE ARTICLES (STRICT GROUPING & ORDERING)
     articles = [
         # --- 1. LEAGUE SETUP ---
         {
@@ -1005,8 +1100,8 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Maximum Keepers: Teams may keep up to 4 players (0, 1, 2, 3, or 4)."),
                 ft.Text("• Positional Allocation Caps:"),
                 ft.Text("   - 1 Keeper: Choose from Offense, Defense, or Special Teams."),
-                ft.Text("   - 2 Keepers: Max 1 Offense, Max 1 Defense/ST."),
-                ft.Text("   - 3 or 4 Keepers: Max 2 Offense, Max 2 Defense/ST."),
+                ft.Text("   - 2 Keepers: Maximum of 1 from Offense, Defense, or Special Teams."),
+                ft.Text("   - 3 or 4 Keepers: Maximum of 2 from Offense, Defense, or Special Teams."),
                 ft.Text("• Rounds 1–4 Rule: A manager may keep only ONE player who costs a Round 1–4 draft pick.", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
                 ft.Text("• Traded / Dropped Player Reset: If a player is traded and kept, or dropped and claimed by a new team, that player resets to Year 2 (kept where drafted previous season).", color=COLOR_GREEN),
             ],
@@ -1049,6 +1144,21 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
                 ft.Text("• Consolation Champion Privilege: The Winner of the Consolation Tournament receives the choice of their draft position (deadline to select is typically one week prior to the draft).", color=ACCENT_AMBER, weight=ft.FontWeight.BOLD),
                 ft.Text("• Consolation Ranks (Picks 2–6): The remaining 5 consolation tournament participants fill the next highest available draft positions based on rank."),
                 ft.Text("• Championship Finishers (Picks 7–12): Championship bracket participants draft in the lowest 6 slots based on final playoff finish (12th: Super Bowl Winner; 11th: Runner-Up; 9th/10th: 3rd place game; 7th/8th: 5th place game)."),
+            ],
+        },
+        {
+            "category": "Draft",
+            "title": "Draft Position Builder & Standings Shift Simulator",
+            "keywords": "draft position builder shift consolation champ choice 1-12 simulator standings order board",
+            "controls": [
+                ft.Text("Official Draft Position Determination Table", size=17, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                ft.Text("The 7th-Place Consolation Champion can choose ANY position from 1 to 12. All other teams shift into the remaining slots in strict order:", italic=True),
+                ft.Row([dt_draft_reference], scroll=ft.ScrollMode.ADAPTIVE),
+                ft.Divider(height=15),
+                ft.Text("Interactive Draft Order Simulator", size=17, weight=ft.FontWeight.BOLD, color=COLOR_GREEN),
+                ft.Text("Select which slot the Consolation Champ picks to preview the exact resulting 1–12 draft order:"),
+                dd_champ_choice,
+                draft_board_column,
             ],
         },
 
@@ -1150,7 +1260,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         },
     ]
 
-    # 4. SEARCH & CHIP FILTERING
+    # 5. SEARCH & CHIP FILTERING
     filtered_list = ft.Column(spacing=10)
     current_category = ["All"]
 
@@ -1173,7 +1283,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             filtered_list.controls.append(
                 ft.Container(
                     content=ft.Text(
-                        f"No rules or articles matched '{query}'. Try searching 'sack', 'cumulative', 'PPR', 'payout', 'table', 'bench', or 'flex'.",
+                        f"No rules or articles matched '{query}'. Try searching 'draft position', 'sack', 'cumulative', 'payout', or 'keeper'.",
                         italic=True,
                         size=15,
                     ),
@@ -1199,8 +1309,8 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         page.update()
 
     txt_search = ft.TextField(
-        label="Search rules, scoring, cumulative points, keepers, payouts...",
-        hint_text="e.g. 'sack', 'cumulative', 'payout', 'offense table', 'PPR', 'bench limit'",
+        label="Search rules, scoring, draft order, keepers, payouts...",
+        hint_text="e.g. 'draft position', 'sack', 'cumulative', 'payout', 'offense table', 'PPR'",
         prefix_icon=ft.Icons.SEARCH,
         expand=True,
         on_change=lambda e: refresh_help_articles(txt_search.value),
@@ -1216,8 +1326,8 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             ft.Button("⚙️ Setup", on_click=lambda e: set_cat("Setup")),
             ft.Button("🎯 Scoring", on_click=lambda e: set_cat("Scoring")),
             ft.Button("📜 Keepers", on_click=lambda e: set_cat("Keepers")),
-            ft.Button("💵 Finances", on_click=lambda e: set_cat("Finances")),
             ft.Button("🏈 Draft", on_click=lambda e: set_cat("Draft")),
+            ft.Button("💵 Finances", on_click=lambda e: set_cat("Finances")),
             ft.Button("🛡️ Bench & IR", on_click=lambda e: set_cat("Bench & IR")),
             ft.Button("🤝 Trades", on_click=lambda e: set_cat("Trades")),
             ft.Button("🏆 Postseason", on_click=lambda e: set_cat("Postseason")),
