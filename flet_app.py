@@ -35,7 +35,7 @@ def create_option(key: str, text: str = None):
 
 
 def safe_update(control_or_page):
-    """Safely updates a control or page only if it has already been mounted to the tree."""
+    """Safely updates a control or page only if it is mounted to the tree."""
     try:
         if control_or_page and getattr(control_or_page, "page", None) is not None:
             control_or_page.update()
