@@ -1,2 +1,8 @@
-tools/onesignal_key.txt
-tools/onesignal_key.txt
+.env
+tools/*.txt
+tools/*_key*
+__pycache__/
+*.pyc
+*.xlsm
+*.pdf
+Yahoo API Pass.png
