@@ -46,7 +46,7 @@
 <body>
   <div class="card">
     <h2>🔔 NPK League Alerts</h2>
-    <p id="status">Initializing alert system...</p>
+    <p id="status">Checking status...</p>
     <button id="sub-btn" onclick="subscribeUser()">Enable Alerts</button>
     <div id="log">Logs: Ready.</div>
     <br>
@@ -62,21 +62,22 @@
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(async function(OneSignal) {
-      log("OneSignal SDK loaded.");
+      log("OneSignal SDK ready.");
       try {
         await OneSignal.init({
           appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
           serviceWorkerPath: "/OneSignalSDKWorker.js"
         });
-        log("OneSignal initialized.");
+        log("OneSignal initialized. Native permission: " + Notification.permission);
         
-        const isSub = await OneSignal.User.PushSubscription.optedIn;
-        log("Current opt-in status: " + isSub);
-        if (isSub) {
+        if (Notification.permission === "granted") {
+          log("Permission already granted. Attempting optIn()...");
+          await OneSignal.User.PushSubscription.optIn();
+          log("Opt-in completed!");
           document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
           document.getElementById("sub-btn").style.display = "none";
         } else {
-          document.getElementById("status").innerText = "Tap below to complete alert setup.";
+          document.getElementById("status").innerText = "Tap below to enable alerts.";
         }
       } catch(e) {
         log("Init error: " + (e.message || e));
@@ -86,22 +87,32 @@
     async function subscribeUser() {
       const btn = document.getElementById("sub-btn");
       btn.disabled = true;
-      log("Requesting browser permission...");
+      log("Current browser permission: " + Notification.permission);
 
-      OneSignalDeferred.push(async function(OneSignal) {
-        try {
-          log("Calling Notifications.requestPermission()...");
-          await OneSignal.Notifications.requestPermission();
-          log("Permission received. Registering push...");
-          await OneSignal.User.PushSubscription.optIn();
-          log("Opt-in completed!");
-          document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
-          btn.style.display = "none";
-        } catch(e) {
-          log("Subscribe error: " + (e.message || e));
+      try {
+        let perm = Notification.permission;
+        if (perm !== "granted") {
+          log("Requesting native browser permission...");
+          perm = await Notification.requestPermission();
+          log("Native permission result: " + perm);
+        }
+
+        if (perm === "granted") {
+          log("Registering with OneSignal...");
+          OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.User.PushSubscription.optIn();
+            log("Opt-in completed!");
+            document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
+            btn.style.display = "none";
+          });
+        } else {
+          log("Permission denied or dismissed: " + perm);
           btn.disabled = false;
         }
-      });
+      } catch (err) {
+        log("Error: " + (err.message || err));
+        btn.disabled = false;
+      }
     }
   </script>
 </body>
