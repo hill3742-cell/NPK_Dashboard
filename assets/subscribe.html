@@ -65,9 +65,8 @@
     async function initAlerts() {
       try {
         if ("serviceWorker" in navigator) {
-          log("Registering worker manually...");
-          const reg = await navigator.serviceWorker.register("/OneSignalSDKWorker.js?v=" + Date.now());
-          log("Worker registered at: " + reg.scope);
+          const reg = await navigator.serviceWorker.register("/OneSignalSDKWorker.js");
+          log("ServiceWorker active: " + reg.scope);
         }
       } catch(e) {
         log("Worker reg error: " + (e.message || e));
@@ -78,19 +77,20 @@
           log("Initializing OneSignal...");
           await OneSignal.init({
             appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
+            safari_web_id: "web.onesignal.auto.3bb557bb-091e-4595-bac2-e40949e4ba5a",
             serviceWorkerPath: "/OneSignalSDKWorker.js",
             autoRegister: false
           });
           log("OneSignal ready.");
 
           const isOpted = await OneSignal.User.PushSubscription.optedIn;
-          log("Already opted in: " + isOpted);
+          log("Current status: optedIn=" + isOpted);
           if (isOpted) {
             document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
             document.getElementById("sub-btn").style.display = "none";
           }
         } catch(err) {
-          log("OneSignal init error: " + (err.message || err));
+          log("Init error: " + (err.message || err));
         }
       });
     }
@@ -98,12 +98,12 @@
     async function subscribeUser() {
       const btn = document.getElementById("sub-btn");
       btn.disabled = true;
-      log("Subscribing...");
+      log("Opting in...");
 
       OneSignalDeferred.push(async function(OneSignal) {
         try {
           await OneSignal.User.PushSubscription.optIn();
-          log("Opt-in completed!");
+          log("Opt-in completed successfully!");
           document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
           btn.style.display = "none";
         } catch(e) {
