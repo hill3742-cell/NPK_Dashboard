@@ -1509,26 +1509,6 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 8
 
-    # OneSignal Web Push SDK
-    page.head.append(
-        ft.Html(
-            """
-            <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-            <script>
-              window.OneSignalDeferred = window.OneSignalDeferred || [];
-              OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.init({
-                  appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
-                  notifyButton: {
-                    enable: true,
-                  },
-                });
-              });
-            </script>
-            """
-        )
-    )
-
     views = [
         build_weekly_tab(page),
         build_history_tab(page),
