@@ -1556,10 +1556,19 @@ def main(page: ft.Page):
 
     btn_toggle_master_header.on_click = toggle_master_header
 
+    def enable_push_notifications(e):
+        page.launch_url("/subscribe.html")
+
+    btn_enable_notifs = ft.TextButton(
+        "🔔 Alerts",
+        icon=ft.Icons.NOTIFICATIONS_ACTIVE,
+        on_click=enable_push_notifications,
+    )
+
     top_bar = ft.Row(
         controls=[
             ft.Text("🏈 NPK FF League", weight=ft.FontWeight.BOLD, size=15, color=ACCENT_AMBER),
-            btn_toggle_master_header,
+            ft.Row([btn_enable_notifs, btn_toggle_master_header], spacing=4),
         ],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )

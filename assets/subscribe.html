@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enable Push Notifications</title>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <style>
+    body {
+      background-color: #1e222a;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 90vh;
+      margin: 0;
+      text-align: center;
+      padding: 20px;
+    }
+    .card {
+      background-color: #282c37;
+      border-radius: 12px;
+      padding: 28px;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    h2 { color: #ffb300; margin-top: 0; }
+    p { color: #ccc; font-size: 15px; line-height: 1.5; }
+    button {
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+    a { color: #ffb300; text-decoration: none; display: inline-block; margin-top: 18px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🔔 NPK League Alerts</h2>
+    <p id="status">Click below to enable push notifications for waiver deadlines, keeper alerts, and trade updates.</p>
+    <button id="sub-btn" onclick="requestPush()">Allow Notifications</button>
+    <br>
+    <a href="/">← Return to Dashboard</a>
+  </div>
+
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
+        serviceWorkerParam: { scope: "/" },
+        serviceWorkerPath: "/OneSignalSDKWorker.js"
+      });
+    });
+
+    async function requestPush() {
+      const btn = document.getElementById("sub-btn");
+      const status = document.getElementById("status");
+      btn.disabled = true;
+      btn.innerText = "Prompting...";
+
+      OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          await OneSignal.Notifications.requestPermission();
+          status.innerText = "Permissions updated! You are now subscribed to NPK League alerts.";
+          btn.style.display = "none";
+        } catch (err) {
+          status.innerText = "Error requesting permission: " + err;
+          btn.disabled = false;
+          btn.innerText = "Try Again";
+        }
+      });
+    }
+  </script>
+</body>
+</html>
