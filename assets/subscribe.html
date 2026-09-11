@@ -46,8 +46,8 @@
 <body>
   <div class="card">
     <h2>🔔 NPK League Alerts</h2>
-    <p id="status">Checking status...</p>
-    <button id="sub-btn" onclick="subscribeUser()">Enable Alerts</button>
+    <p id="status">Connecting alert service...</p>
+    <button id="sub-btn" onclick="subscribeUser()">Register Device</button>
     <div id="log">Logs: Ready.</div>
     <br>
     <a href="/">← Return to Dashboard</a>
@@ -61,59 +61,59 @@
     }
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      log("OneSignal SDK ready.");
+
+    async function initAlerts() {
       try {
-        await OneSignal.init({
-          appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
-          serviceWorkerPath: "/OneSignalSDKWorker.js"
-        });
-        log("OneSignal initialized. Native permission: " + Notification.permission);
-        
-        if (Notification.permission === "granted") {
-          log("Permission already granted. Attempting optIn()...");
-          await OneSignal.User.PushSubscription.optIn();
-          log("Opt-in completed!");
-          document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
-          document.getElementById("sub-btn").style.display = "none";
-        } else {
-          document.getElementById("status").innerText = "Tap below to enable alerts.";
+        if ("serviceWorker" in navigator) {
+          log("Registering worker manually...");
+          const reg = await navigator.serviceWorker.register("/OneSignalSDKWorker.js?v=" + Date.now());
+          log("Worker registered at: " + reg.scope);
         }
       } catch(e) {
-        log("Init error: " + (e.message || e));
+        log("Worker reg error: " + (e.message || e));
       }
-    });
+
+      OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          log("Initializing OneSignal...");
+          await OneSignal.init({
+            appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
+            serviceWorkerPath: "/OneSignalSDKWorker.js",
+            autoRegister: false
+          });
+          log("OneSignal ready.");
+
+          const isOpted = await OneSignal.User.PushSubscription.optedIn;
+          log("Already opted in: " + isOpted);
+          if (isOpted) {
+            document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
+            document.getElementById("sub-btn").style.display = "none";
+          }
+        } catch(err) {
+          log("OneSignal init error: " + (err.message || err));
+        }
+      });
+    }
 
     async function subscribeUser() {
       const btn = document.getElementById("sub-btn");
       btn.disabled = true;
-      log("Current browser permission: " + Notification.permission);
+      log("Subscribing...");
 
-      try {
-        let perm = Notification.permission;
-        if (perm !== "granted") {
-          log("Requesting native browser permission...");
-          perm = await Notification.requestPermission();
-          log("Native permission result: " + perm);
-        }
-
-        if (perm === "granted") {
-          log("Registering with OneSignal...");
-          OneSignalDeferred.push(async function(OneSignal) {
-            await OneSignal.User.PushSubscription.optIn();
-            log("Opt-in completed!");
-            document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
-            btn.style.display = "none";
-          });
-        } else {
-          log("Permission denied or dismissed: " + perm);
+      OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          await OneSignal.User.PushSubscription.optIn();
+          log("Opt-in completed!");
+          document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
+          btn.style.display = "none";
+        } catch(e) {
+          log("Opt-in error: " + (e.message || e));
           btn.disabled = false;
         }
-      } catch (err) {
-        log("Error: " + (err.message || err));
-        btn.disabled = false;
-      }
+      });
     }
+
+    initAlerts();
   </script>
 </body>
 </html>
