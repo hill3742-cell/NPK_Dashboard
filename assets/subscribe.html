@@ -28,6 +28,7 @@
     }
     h2 { color: #ffb300; margin-top: 0; }
     p { color: #ccc; font-size: 15px; line-height: 1.5; word-break: break-word; }
+    #log { font-size: 12px; color: #888; margin-top: 10px; text-align: left; background: #16181e; padding: 8px; border-radius: 6px; }
     button {
       background-color: #4caf50;
       color: white;
@@ -45,53 +46,70 @@
 <body>
   <div class="card">
     <h2>🔔 NPK League Alerts</h2>
-    <p id="status">Checking status...</p>
-    <button id="sub-btn" onclick="requestPush()">Allow Notifications</button>
+    <p id="status">Initializing alert system...</p>
+    <button id="sub-btn" onclick="subscribeUser()">Enable Alerts</button>
+    <div id="log">Logs: Ready.</div>
     <br>
     <a href="/">← Return to Dashboard</a>
   </div>
 
   <script>
+    function log(msg) {
+      console.log(msg);
+      const l = document.getElementById("log");
+      if (l) l.innerText += "\n> " + msg;
+    }
+
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(async function(OneSignal) {
-      const status = document.getElementById("status");
-      const btn = document.getElementById("sub-btn");
-
+      log("OneSignal SDK loaded.");
       try {
         await OneSignal.init({
           appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
           serviceWorkerParam: { scope: "/" },
           serviceWorkerPath: "/OneSignalSDKWorker.js"
         });
-
-        if (Notification.permission === "granted") {
-          await OneSignal.User.PushSubscription.optIn();
-          status.innerText = "✅ Subscribed! Your device is registered for alerts.";
-          btn.style.display = "none";
+        log("OneSignal initialized.");
+        
+        const isSub = await OneSignal.User.PushSubscription.optedIn;
+        log("Current opt-in status: " + isSub);
+        if (isSub) {
+          document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
+          document.getElementById("sub-btn").style.display = "none";
         } else {
-          status.innerText = "Click below to enable push notifications for waiver deadlines, keeper alerts, and trades.";
+          document.getElementById("status").innerText = "Tap below to complete alert setup.";
         }
-      } catch (err) {
-        status.innerText = "Init error: " + err.message;
+      } catch(e) {
+        log("Init error: " + (e.message || e));
       }
     });
 
-    async function requestPush() {
+    async function subscribeUser() {
       const btn = document.getElementById("sub-btn");
-      const status = document.getElementById("status");
       btn.disabled = true;
-      btn.innerText = "Registering...";
+      log("Requesting browser permission...");
+      
+      if ("serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.register("/OneSignalSDKWorker.js", { scope: "/" });
+          log("ServiceWorker registered: " + reg.scope);
+        } catch(err) {
+          log("SW reg error: " + err.message);
+        }
+      }
 
       OneSignalDeferred.push(async function(OneSignal) {
         try {
+          log("Calling Notifications.requestPermission()...");
           await OneSignal.Notifications.requestPermission();
+          log("Permission response received. Opting in...");
           await OneSignal.User.PushSubscription.optIn();
-          status.innerText = "✅ Subscribed! Your device is registered for alerts.";
+          log("Opt-in completed!");
+          document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
           btn.style.display = "none";
-        } catch (err) {
-          status.innerText = "Error: " + (err.message || err);
+        } catch(e) {
+          log("Subscribe error: " + (e.message || e));
           btn.disabled = false;
-          btn.innerText = "Try Again";
         }
       });
     }
