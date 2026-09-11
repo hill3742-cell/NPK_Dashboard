@@ -28,7 +28,7 @@
     }
     h2 { color: #ffb300; margin-top: 0; }
     p { color: #ccc; font-size: 15px; line-height: 1.5; word-break: break-word; }
-    #log { font-size: 12px; color: #888; margin-top: 10px; text-align: left; background: #16181e; padding: 8px; border-radius: 6px; }
+    #log { font-size: 12px; color: #888; margin-top: 10px; text-align: left; background: #16181e; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
     button {
       background-color: #4caf50;
       color: white;
@@ -66,7 +66,6 @@
       try {
         await OneSignal.init({
           appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
-          serviceWorkerParam: { scope: "/" },
           serviceWorkerPath: "/OneSignalSDKWorker.js"
         });
         log("OneSignal initialized.");
@@ -88,21 +87,12 @@
       const btn = document.getElementById("sub-btn");
       btn.disabled = true;
       log("Requesting browser permission...");
-      
-      if ("serviceWorker" in navigator) {
-        try {
-          const reg = await navigator.serviceWorker.register("/OneSignalSDKWorker.js", { scope: "/" });
-          log("ServiceWorker registered: " + reg.scope);
-        } catch(err) {
-          log("SW reg error: " + err.message);
-        }
-      }
 
       OneSignalDeferred.push(async function(OneSignal) {
         try {
           log("Calling Notifications.requestPermission()...");
           await OneSignal.Notifications.requestPermission();
-          log("Permission response received. Opting in...");
+          log("Permission received. Registering push...");
           await OneSignal.User.PushSubscription.optIn();
           log("Opt-in completed!");
           document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
