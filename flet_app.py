@@ -1557,7 +1557,7 @@ def main(page: ft.Page):
     btn_toggle_master_header.on_click = toggle_master_header
 
     def enable_push_notifications(e):
-        page.launch_url("/subscribe.html")
+        page.launch_url("/subscribe.html", web_window_name="_blank")
 
     btn_enable_notifs = ft.TextButton(
         "🔔 Alerts",
@@ -1590,8 +1590,12 @@ def main(page: ft.Page):
 # RUNNER: ENVIRONMENT-AWARE FOR CLOUD & LOCAL
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8550))
-    if "PORT" in os.environ:
-        ft.run(main, host="0.0.0.0", port=port, assets_dir="assets")
-    else:
-        ft.run(main, assets_dir="assets", view=ft.AppView.WEB_BROWSER)
+    port = int(os.getenv("PORT", 8550))
+    # Disable COEP so external SDK scripts (like OneSignal) load without browser blocking
+    ft.run(
+        main,
+        host="0.0.0.0",
+        port=port,
+        assets_dir="assets",
+        cross_origin_embedder_policy=False,
+    )
