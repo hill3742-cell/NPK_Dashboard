@@ -1591,11 +1591,4 @@ def main(page: ft.Page):
 # ---------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8550))
-    # Disable COEP so external SDK scripts (like OneSignal) load without browser blocking
-    ft.run(
-        main,
-        host="0.0.0.0",
-        port=port,
-        assets_dir="assets",
-        cross_origin_embedder_policy=False,
-    )
+    ft.run(main, host="0.0.0.0", port=port, assets_dir="assets")

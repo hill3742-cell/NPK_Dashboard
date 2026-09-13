@@ -60,9 +60,9 @@
 <body>
   <div class="card">
     <h2>🔔 NPK League Alerts</h2>
-    <p id="status">Connecting alert service...</p>
+    <p id="status">Click below to enable notifications on this device.</p>
     <button id="sub-btn" onclick="subscribeUser()">Register Device</button>
-    <div id="log">Status: Initializing...</div>
+    <div id="log">Status: Ready to register.</div>
     <br>
     <a href="/">← Return to Dashboard</a>
   </div>
@@ -74,95 +74,31 @@
       if (l) l.innerText += '\n> ' + msg;
     }
 
-    // Load OneSignal dynamically
-    const script = document.createElement('script');
-    script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-    script.defer = true;
-    script.onload = () => {
-      log("OneSignal SDK script loaded.");
-      initOneSignal();
-    };
-    script.onerror = (e) => {
-      log("COEP script block encountered. Falling back to native notification registration.");
-      fallbackNativePush();
-    };
-    document.head.appendChild(script);
-
-    function initOneSignal() {
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        try {
-          await OneSignal.init({
-            appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
-            safari_web_id: "web.onesignal.auto.3bb557bb-091e-4595-bac2-e40949e4ba5a",
-            serviceWorkerParam: { scope: "/" },
-            serviceWorkerPath: "OneSignalSDKWorker.js",
-            allowLocalhostAsSecureOrigin: true
-          });
-
-          log("OneSignal initialized.");
-
-          OneSignal.User.PushSubscription.addEventListener("change", function(event) {
-            if (event.current.optedIn) {
-              document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
-              document.getElementById("sub-btn").style.display = "none";
-            }
-          });
-
-          if (OneSignal.User.PushSubscription.optedIn) {
-            document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
-            document.getElementById("sub-btn").style.display = "none";
-            log("Device is already subscribed.");
-          } else {
-            document.getElementById("status").innerText = "Click below to enable notifications on this device.";
-          }
-        } catch(err) {
-          log("Init notice: " + (err.message || err));
-        }
-      });
-    }
-
-    function fallbackNativePush() {
-      document.getElementById('status').innerText = 'Requesting browser notification access directly...';
-    }
-
     async function subscribeUser() {
       const btn = document.getElementById("sub-btn");
       btn.disabled = true;
       log("Requesting browser permission...");
 
-      if (window.OneSignalDeferred && window.OneSignal) {
-        OneSignalDeferred.push(async function(OneSignal) {
-          try {
-            await OneSignal.Notifications.requestPermission();
-            await OneSignal.User.PushSubscription.optIn();
-            log("Subscription confirmed!");
-            document.getElementById("status").innerText = "✅ Subscribed! This device is registered.";
-            btn.style.display = "none";
-          } catch(e) {
-            log("OneSignal optIn notice: " + (e.message || e));
-            requestNative();
-          }
-        });
-      } else {
-        requestNative();
-      }
-    }
-
-    async function requestNative() {
-      const btn = document.getElementById("sub-btn");
       try {
-        const perm = await Notification.requestPermission();
-        if (perm === 'granted') {
-          log("Browser notification permission granted.");
-          document.getElementById("status").innerText = "✅ Subscribed! Notifications are enabled.";
+        const permission = await Notification.requestPermission();
+        log("Browser permission result: " + permission);
+
+        if (permission === 'granted') {
+          // Register service worker directly on root domain
+          if ('serviceWorker' in navigator) {
+            log("Registering service worker...");
+            const reg = await navigator.serviceWorker.register('/OneSignalSDKWorker.js', { scope: '/' });
+            log("Service Worker registered successfully.");
+          }
+
+          document.getElementById("status").innerText = "✅ Subscribed! Notifications are enabled on this device.";
           btn.style.display = "none";
         } else {
-          log("Permission response: " + perm);
+          document.getElementById("status").innerText = "⚠️ Permission was not granted (" + permission + ").";
           btn.disabled = false;
         }
       } catch (err) {
-        log("Notification error: " + (err.message || err));
+        log("Registration error: " + (err.message || err));
         btn.disabled = false;
       }
     }
