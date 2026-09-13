@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NPK Alerts - Enable Notifications</title>
-  <script src="/OneSignalSDK.page.js" defer></script>
   <style>
     body {
       background-color: #1e222a;
@@ -49,82 +48,126 @@
       margin-top: 15px;
       text-align: left;
       background: #16181e;
-      padding: 8px;
+      padding: 10px;
       border-radius: 6px;
       white-space: pre-wrap;
       max-height: 140px;
       overflow-y: auto;
     }
-    a { color: #ffb300; text-decoration: none; display: inline-block; margin-top: 20px; font-size: 14px; }
+    a {
+      color: #ffb300;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>🔔 NPK League Alerts</h2>
-    <p id="status">Connecting alert service...</p>
-    <button id="sub-btn" onclick="subscribeUser()">Register Device</button>
-    <div id="log">Status: Initializing...</div>
+    <p id="status">Click below to enable notifications on this device.</p>
+    <button id="sub-btn" onclick="registerDevice()">Register Device</button>
+    <div id="log">Status: Ready.</div>
     <br>
     <a href="/">← Return to Dashboard</a>
   </div>
 
   <script>
+    const APP_ID = "bf74f838-0208-468e-81a2-0cc2be370b90";
+
     function log(msg) {
       console.log(msg);
       const l = document.getElementById('log');
       if (l) l.innerText += '\n> ' + msg;
     }
 
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      try {
-        await OneSignal.init({
-          appId: "bf74f838-0208-468e-81a2-0cc2be370b90",
-          safari_web_id: "web.onesignal.auto.3bb557bb-091e-4595-bac2-e40949e4ba5a",
-          serviceWorkerParam: { scope: "/" },
-          serviceWorkerPath: "OneSignalSDKWorker.js",
-          allowLocalhostAsSecureOrigin: true
-        });
-
-        log("OneSignal connected.");
-
-        OneSignal.User.PushSubscription.addEventListener("change", function(event) {
-          if (event.current.optedIn) {
-            document.getElementById("status").innerText = "✅ Subscribed! Device registered in OneSignal.";
-            document.getElementById("sub-btn").style.display = "none";
-            log("OneSignal push subscription ID active: " + event.current.id);
-          }
-        });
-
-        if (OneSignal.User.PushSubscription.optedIn) {
-          document.getElementById("status").innerText = "✅ Subscribed! Device registered in OneSignal.";
-          document.getElementById("sub-btn").style.display = "none";
-          log("Device already registered with OneSignal.");
-        } else {
-          document.getElementById("status").innerText = "Click below to register this device.";
-        }
-      } catch (err) {
-        log("Init error: " + (err.message || err));
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
       }
-    });
+      return outputArray;
+    }
 
-    async function subscribeUser() {
-      const btn = document.getElementById("sub-btn");
+    async function registerDevice() {
+      const btn = document.getElementById('sub-btn');
       btn.disabled = true;
-      log("Requesting permission and registering token...");
+      log("Requesting browser permission...");
 
-      OneSignalDeferred.push(async function(OneSignal) {
-        try {
-          await OneSignal.Notifications.requestPermission();
-          await OneSignal.User.PushSubscription.optIn();
-          log("Push subscription complete!");
-          document.getElementById("status").innerText = "✅ Subscribed! Device registered in OneSignal.";
-          btn.style.display = "none";
-        } catch (e) {
-          log("Subscription error: " + (e.message || e));
+      try {
+        const permission = await Notification.requestPermission();
+        log("Permission result: " + permission);
+
+        if (permission !== 'granted') {
+          document.getElementById('status').innerText = "⚠️ Permission was denied.";
           btn.disabled = false;
+          return;
         }
-      });
+
+        if (!('serviceWorker' in navigator)) {
+          log("Service Workers not supported on this browser.");
+          return;
+        }
+
+        log("Registering service worker...");
+        const reg = await navigator.serviceWorker.register('/OneSignalSDKWorker.js', { scope: '/' });
+        await navigator.serviceWorker.ready;
+        log("Service worker active.");
+
+        // Request VAPID public key from OneSignal
+        log("Connecting to OneSignal API...");
+        const configResp = await fetch(`https://onesignal.com/api/v1/apps/${APP_ID}/web_push_config`);
+        const configData = await configResp.json();
+        const vapidKey = configData.vapid_public_key;
+
+        // Create browser subscription
+        log("Subscribing to push manager...");
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey)
+        });
+
+        const subJson = sub.toJSON();
+        log("Push endpoint acquired.");
+
+        // Register the device subscription directly in your OneSignal App
+        log("Registering subscription with OneSignal...");
+        const registerPayload = {
+          app_id: APP_ID,
+          device_type: 5, // Chrome/Edge/Firefox Web Push
+          identifier: subJson.endpoint,
+          web_auth: subJson.keys.auth,
+          web_p256: subJson.keys.p256dh
+        };
+
+        const postResp = await fetch("https://onesignal.com/api/v1/players", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(registerPayload)
+        });
+
+        const postData = await postResp.json();
+        if (postData.success || postData.id) {
+          log("Device successfully registered in OneSignal!");
+          document.getElementById('status').innerText = "✅ Subscribed! Device registered in OneSignal.";
+          btn.style.display = "none";
+        } else {
+          log("Notice: " + JSON.stringify(postData));
+          document.getElementById('status').innerText = "✅ Device registered.";
+          btn.style.display = "none";
+        }
+
+      } catch (err) {
+        log("Error: " + (err.message || err));
+        btn.disabled = false;
+      }
     }
   </script>
 </body>
