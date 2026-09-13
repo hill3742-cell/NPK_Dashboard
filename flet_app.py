@@ -1557,7 +1557,7 @@ def main(page: ft.Page):
     btn_toggle_master_header.on_click = toggle_master_header
 
     def enable_push_notifications(e):
-        page.launch_url("/subscribe.html", web_window_name="_blank")
+        page.launch_url("/subscribe.html")
 
     btn_enable_notifs = ft.TextButton(
         "🔔 Alerts",
