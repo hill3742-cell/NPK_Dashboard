@@ -1587,5 +1587,26 @@ def main(page: ft.Page):
 # RUNNER: ENVIRONMENT-AWARE FOR CLOUD & LOCAL
 # ---------------------------------------------------------
 if __name__ == "__main__":
+    import os
     port = int(os.getenv("PORT", 8550))
-    ft.run(main, host="0.0.0.0", port=port, assets_dir="assets")
+    app = ft.app(target=main, assets_dir="assets", export_asgi_app=True)
+
+    # Wrap ASGI app to remove restrictive COEP header
+    async def no_coep_app(scope, receive, send):
+        if scope["type"] == "http":
+            async def send_wrapper(message):
+                if message["type"] == "http.response.start":
+                    # Filter out Cross-Origin-Embedder-Policy header
+                    headers = [
+                        (k, v) for k, v in message.get("headers", [])
+                        if k.lower() != b"cross-origin-embedder-policy"
+                    ]
+                    headers.append((b"cross-origin-embedder-policy", b"unsafe-none"))
+                    message["headers"] = headers
+                await send(message)
+            await app(scope, receive, send_wrapper)
+        else:
+            await app(scope, receive, send)
+
+    import uvicorn
+    uvicorn.run(no_coep_app, host="0.0.0.0", port=port)
