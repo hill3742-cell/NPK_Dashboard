@@ -8,14 +8,40 @@ LEAGUE_TEAMS = [
     "Other",
 ]
 
-CHAT_BUBBLE_COLORS = {
-    "Light Grey (Default)": "#E0E0E0",
-    "Soft Blue": "#90CAF9",
-    "Mint Green": "#A5D6A7",
-    "Pale Amber": "#FFE082",
-    "Soft Pink": "#F48FB1",
-    "Lavender": "#CE93D8",
-}
+# 12 distinct, high-contrast bubble colors assigned in order of manager arrival
+USER_COLOR_PALETTE = [
+    "#FFE082",  # 1st: Warm Amber
+    "#90CAF9",  # 2nd: Sky Blue
+    "#A5D6A7",  # 3rd: Mint Green
+    "#FFCCBC",  # 4th: Pale Coral
+    "#CE93D8",  # 5th: Soft Lavender
+    "#80CBC4",  # 6th: Soft Teal
+    "#FFF59D",  # 7th: Lemon
+    "#F48FB1",  # 8th: Rose Pink
+    "#D1C4E9",  # 9th: Light Purple
+    "#FFAB91",  # 10th: Light Tangerine
+    "#C5E1A5",  # 11th: Light Olive
+    "#B0BEC5",  # 12th: Cool Grey
+]
+
+def resolve_user_color(user_name: str) -> str:
+    """Assigns one of the 12 colors in order of manager sign-in/first message."""
+    conn = sqlite3.connect(CHAT_DB_FILE)
+    c = conn.cursor()
+    # Check if this user already has an assigned color stored
+    c.execute("SELECT color FROM messages WHERE user_name = ? AND color IS NOT NULL LIMIT 1", (user_name,))
+    row = c.fetchone()
+    if row and row[0]:
+        conn.close()
+        return row[0]
+
+    # Find how many unique users have registered a message before this user
+    c.execute("SELECT COUNT(DISTINCT user_name) FROM messages")
+    user_count = c.fetchone()[0] or 0
+    conn.close()
+
+    # Assign the next color sequentially (wrapping safely if needed)
+    return USER_COLOR_PALETTE[user_count % len(USER_COLOR_PALETTE)]
 
 from keeper_rules import (
     calculate_keeper_cost,
@@ -1625,12 +1651,6 @@ def main(page: ft.Page):
         options=[ft.dropdown.Option(t) for t in LEAGUE_TEAMS],
     )
 
-    dd_color = ft.Dropdown(
-        label="Chat Bubble Color",
-        value="Light Grey (Default)",
-        options=[ft.dropdown.Option(c) for c in CHAT_BUBBLE_COLORS.keys()],
-    )
-
     identity_modal_card = ft.Card(
         elevation=12,
         content=ft.Container(
@@ -1652,7 +1672,6 @@ def main(page: ft.Page):
                         italic=True,
                     ),
                     custom_name_field,
-                    dd_color,
                     ft.Row(
                         [
                             ft.Button(
@@ -1683,9 +1702,10 @@ def main(page: ft.Page):
             page.update()
             return
 
-        chosen_hex = CHAT_BUBBLE_COLORS.get(dd_color.value, "#E0E0E0")
+        # Automatically assign the sequential color for this user
+        assigned_hex = resolve_user_color(display_name)
         set_storage("chat_user_name", display_name)
-        set_storage("chat_user_color", chosen_hex)
+        set_storage("chat_user_color", assigned_hex)
 
         identity_overlay_layer.visible = False
         page.update()
@@ -1863,17 +1883,15 @@ def main(page: ft.Page):
 
     page.overlay.extend([room_selector_dialog, chat_dialog])
 
-    # Top-right stacked icon: 2 cards/arrows on fire + notification dot
+    # Top-right comic chat bubble icon + notification dot
     chat_trigger_btn = ft.Container(
         content=ft.Stack(
             controls=[
                 ft.Container(
-                    content=ft.Stack(
-                        [
-                            ft.Icon(ft.Icons.STYLE, size=24, color=ft.Colors.WHITE70),
-                            ft.Icon(ft.Icons.LOCAL_FIRE_DEPARTMENT, size=18, color=ft.Colors.ORANGE_ACCENT),
-                        ],
-                        alignment=ft.Alignment(0, 0),
+                    content=ft.Icon(
+                        ft.Icons.CHAT_BUBBLE_ROUNDED,
+                        size=24,
+                        color=ft.Colors.AMBER_300,
                     ),
                     alignment=ft.Alignment(0, 0),
                     width=42,
@@ -1942,16 +1960,10 @@ def main(page: ft.Page):
 
     btn_toggle_master_header.on_click = toggle_master_header
 
-    btn_enable_notifs = ft.TextButton(
-        "🔔 Alerts",
-        icon=ft.Icons.NOTIFICATIONS_ACTIVE,
-        url="/subscribe.html",
-    )
-
     top_bar = ft.Row(
         controls=[
             ft.Text("🏈 NPK FF League", weight=ft.FontWeight.BOLD, size=15, color=ACCENT_AMBER),
-            ft.Row([btn_enable_notifs, chat_trigger_btn, btn_toggle_master_header], spacing=2),
+            ft.Row([chat_trigger_btn, btn_toggle_master_header], spacing=4),
         ],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
