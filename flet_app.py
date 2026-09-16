@@ -2,7 +2,6 @@ import os
 import re
 from datetime import datetime
 import flet as ft
-import chat_db
 
 # Placeholder team choices until Yahoo API live connection is provisioned
 LEAGUE_TEAMS = [
