@@ -669,11 +669,49 @@ def init_chat_db():
             user_name TEXT,
             color TEXT,
             text TEXT,
+            room TEXT DEFAULT 'roast',
             timestamp TEXT
         )
     """)
+    # Ensure room column exists if migrating from older schema
+    c.execute("PRAGMA table_info(messages)")
+    cols = [col[1] for col in c.fetchall()]
+    if "room" not in cols:
+        c.execute("ALTER TABLE messages ADD COLUMN room TEXT DEFAULT 'roast'")
     conn.commit()
     conn.close()
+
+init_chat_db()
+
+def get_chat_messages(limit=60, room="roast"):
+    conn = sqlite3.connect(CHAT_DB_FILE)
+    c = conn.cursor()
+    c.execute(
+        "SELECT user_name, color, text, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?",
+        (room, limit)
+    )
+    rows = c.fetchall()
+    conn.close()
+    return rows[::-1]
+
+def save_chat_message(user_name, color, text, room="roast"):
+    conn = sqlite3.connect(CHAT_DB_FILE)
+    c = conn.cursor()
+    now_str = datetime.now().strftime("%I:%M %p")
+    c.execute(
+        "INSERT INTO messages (user_name, color, text, room, timestamp) VALUES (?, ?, ?, ?, ?)",
+        (user_name, color, text, room, now_str)
+    )
+    conn.commit()
+    conn.close()
+
+def get_latest_message_id():
+    conn = sqlite3.connect(CHAT_DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT MAX(id) FROM messages")
+    row = c.fetchone()
+    conn.close()
+    return row[0] if (row and row[0] is not None) else 0
 
 init_chat_db()
 
@@ -1652,16 +1690,35 @@ def main(page: ft.Page):
         identity_overlay_layer.visible = False
         page.update()
 
-    # --- Chat Tab UI ---
+    # --- Dual Room Chat Modals & Top-Right Flaming Swap Icon ---
+    active_room = ["roast"]
+    last_seen_msg_id = [get_latest_message_id()]
+
     chat_list = ft.ListView(
         expand=True,
         spacing=10,
         auto_scroll=True,
     )
 
+    badge_dot = ft.Container(
+        width=10,
+        height=10,
+        bgcolor=ft.Colors.RED_ACCENT,
+        border_radius=5,
+        visible=False,
+    )
+
+    def check_unread():
+        latest = get_latest_message_id()
+        if latest > last_seen_msg_id[0] and not chat_dialog.open:
+            badge_dot.visible = True
+        else:
+            badge_dot.visible = False
+        safe_update(badge_dot)
+
     def render_messages():
         chat_list.controls.clear()
-        msgs = get_chat_messages()
+        msgs = get_chat_messages(room=active_room[0])
         current_user = get_storage("chat_user_name") or ""
         for sender, bubble_color, text, time_str in msgs:
             is_me = (sender == current_user)
@@ -1683,16 +1740,16 @@ def main(page: ft.Page):
                             bgcolor=bubble_color,
                             border_radius=10,
                             padding=10,
-                            width=320,
+                            width=300,
                         )
                     ],
                     alignment=ft.MainAxisAlignment.END if is_me else ft.MainAxisAlignment.START,
                 )
             )
-        page.update()
+        safe_update(chat_list)
 
     txt_input = ft.TextField(
-        hint_text="Drop a roast, trade offer, or hot take...",
+        hint_text="Type a message...",
         expand=True,
         border_color=ft.Colors.AMBER_400,
     )
@@ -1703,9 +1760,12 @@ def main(page: ft.Page):
         msg = txt_input.value.strip()
         if not msg:
             return
-        save_chat_message(user, color, msg)
+        save_chat_message(user, color, msg, room=active_room[0])
         txt_input.value = ""
+        last_seen_msg_id[0] = get_latest_message_id()
+        badge_dot.visible = False
         render_messages()
+        page.update()
 
     txt_input.on_submit = send_message_click
 
@@ -1715,44 +1775,126 @@ def main(page: ft.Page):
         on_click=send_message_click,
     )
 
-    btn_refresh_chat = ft.IconButton(
-        icon=ft.Icons.REFRESH,
-        tooltip="Refresh Chats",
-        on_click=lambda e: render_messages(),
-    )
+    room_title = ft.Text("🔥 Roast Chat Room", size=17, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
 
-    roasting_tab_view = ft.Container(
-        expand=True,
-        padding=10,
-        content=ft.Column(
-            controls=[
-                ft.Row(
-                    [
-                        ft.Text("🔥 NPK Banter & Roasting Hub", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
-                        btn_refresh_chat,
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                ),
-                ft.Divider(height=4),
-                chat_list,
-                ft.Row(controls=[txt_input, send_btn], spacing=8),
+    def close_chat(e):
+        chat_dialog.open = False
+        page.update()
+
+    chat_dialog = ft.AlertDialog(
+        title=ft.Row(
+            [
+                room_title,
+                ft.IconButton(ft.Icons.CLOSE, on_click=close_chat),
             ],
-            expand=True,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        ),
+        content=ft.Container(
+            width=430,
+            height=500,
+            content=ft.Column(
+                controls=[
+                    chat_list,
+                    ft.Row(controls=[txt_input, send_btn], spacing=6),
+                ],
+                expand=True,
+            ),
         ),
     )
 
-    # --- Tab Navigation & Views ---
-    # Unread badge indicator
-    roast_badge = ft.Container(
-        width=8,
-        height=8,
-        bgcolor=ft.Colors.RED_ACCENT,
-        border_radius=4,
-        visible=False,
+    def open_room(room_key: str):
+        active_room[0] = room_key
+        last_seen_msg_id[0] = get_latest_message_id()
+        badge_dot.visible = False
+        room_selector_dialog.open = False
+        if room_key == "roast":
+            room_title.value = "🔥 The Roast Hub"
+            room_title.color = ft.Colors.ORANGE_ACCENT
+            txt_input.hint_text = "Drop a roast or weekly jab..."
+        else:
+            room_title.value = "⇄ Trade Block Hub"
+            room_title.color = ft.Colors.CYAN_ACCENT
+            txt_input.hint_text = "Propose a trade or available players..."
+        render_messages()
+        chat_dialog.open = True
+        page.update()
+
+    room_selector_dialog = ft.AlertDialog(
+        title=ft.Text("Select Chat Room", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+        content=ft.Container(
+            width=320,
+            padding=10,
+            content=ft.Row(
+                controls=[
+                    ft.Button(
+                        content=ft.Column(
+                            [
+                                ft.Icon(ft.Icons.LOCAL_FIRE_DEPARTMENT, size=42, color=ft.Colors.ORANGE_ACCENT),
+                                ft.Text("Roast Hub", weight=ft.FontWeight.BOLD),
+                            ],
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=4,
+                        ),
+                        width=135,
+                        height=110,
+                        on_click=lambda e: open_room("roast"),
+                    ),
+                    ft.Button(
+                        content=ft.Column(
+                            [
+                                ft.Icon(ft.Icons.SWAP_HORIZ, size=42, color=ft.Colors.CYAN_ACCENT),
+                                ft.Text("Trade Block", weight=ft.FontWeight.BOLD),
+                            ],
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=4,
+                        ),
+                        width=135,
+                        height=110,
+                        on_click=lambda e: open_room("trade"),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=12,
+            ),
+        ),
     )
 
+    page.overlay.extend([room_selector_dialog, chat_dialog])
+
+    # Top-right stacked icon: 2 cards/arrows on fire + notification dot
+    chat_trigger_btn = ft.Container(
+        content=ft.Stack(
+            controls=[
+                ft.Container(
+                    content=ft.Stack(
+                        [
+                            ft.Icon(ft.Icons.STYLE, size=24, color=ft.Colors.WHITE70),
+                            ft.Icon(ft.Icons.LOCAL_FIRE_DEPARTMENT, size=18, color=ft.Colors.ORANGE_ACCENT),
+                        ],
+                        alignment=ft.Alignment(0, 0),
+                    ),
+                    alignment=ft.Alignment(0, 0),
+                    width=42,
+                    height=42,
+                ),
+                ft.Container(
+                    content=badge_dot,
+                    alignment=ft.Alignment(1, -1),
+                    padding=ft.Padding(0, 2, 2, 0),
+                ),
+            ],
+            width=42,
+            height=42,
+        ),
+        tooltip="Open Chat Hubs (Roast / Trade)",
+        on_click=lambda e: setattr(room_selector_dialog, "open", True) or page.update(),
+        padding=4,
+    )
+
+    # Views list: Weekly Hub is now index 0 since chat is accessed from top-right
     views = [
-        roasting_tab_view,
         build_weekly_tab(page),
         build_history_tab(page),
         build_draft_tab(page),
@@ -1763,29 +1905,17 @@ def main(page: ft.Page):
     body = ft.Container(content=views[0], expand=True)
 
     def switch_tab(idx):
-        if idx == 0:
-            roast_badge.visible = False
-            render_messages()
         body.content = views[idx]
+        check_unread()
         page.update()
-
-    roast_button_content = ft.Row(
-        [
-            ft.Text("🔥 Roasting"),
-            roast_badge,
-        ],
-        spacing=4,
-        tight=True,
-    )
 
     nav_row = ft.Row(
         controls=[
-            ft.Button(content=roast_button_content, on_click=lambda e: switch_tab(0)),
-            ft.Button("Weekly Hub", on_click=lambda e: switch_tab(1)),
-            ft.Button("History Archives", on_click=lambda e: switch_tab(2)),
-            ft.Button("Draft Results", on_click=lambda e: switch_tab(3)),
-            ft.Button("Keeper Roster", on_click=lambda e: switch_tab(4)),
-            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(5)),
+            ft.Button("Weekly Hub", on_click=lambda e: switch_tab(0)),
+            ft.Button("History Archives", on_click=lambda e: switch_tab(1)),
+            ft.Button("Draft Results", on_click=lambda e: switch_tab(2)),
+            ft.Button("Keeper Roster", on_click=lambda e: switch_tab(3)),
+            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(4)),
         ],
         scroll=ft.ScrollMode.ADAPTIVE,
         alignment=ft.MainAxisAlignment.CENTER,
@@ -1821,7 +1951,7 @@ def main(page: ft.Page):
     top_bar = ft.Row(
         controls=[
             ft.Text("🏈 NPK FF League", weight=ft.FontWeight.BOLD, size=15, color=ACCENT_AMBER),
-            ft.Row([btn_enable_notifs, btn_toggle_master_header], spacing=4),
+            ft.Row([btn_enable_notifs, chat_trigger_btn, btn_toggle_master_header], spacing=2),
         ],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
