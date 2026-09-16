@@ -2,6 +2,22 @@ import os
 import re
 from datetime import datetime
 import flet as ft
+import chat_db
+
+# Placeholder team choices until Yahoo API live connection is provisioned
+LEAGUE_TEAMS = [
+    "Other",
+]
+
+CHAT_BUBBLE_COLORS = {
+    "Light Grey (Default)": "#E0E0E0",
+    "Soft Blue": "#90CAF9",
+    "Mint Green": "#A5D6A7",
+    "Pale Amber": "#FFE082",
+    "Soft Pink": "#F48FB1",
+    "Lavender": "#CE93D8",
+}
+
 from keeper_rules import (
     calculate_keeper_cost,
     calculate_traded_keeper_cost,
@@ -638,6 +654,46 @@ def load_payouts_from_excel():
     except Exception as err:
         return None, str(err)
 
+# ---------------------------------------------------------
+# CHAT DATABASE SETUP
+# ---------------------------------------------------------
+import sqlite3
+
+CHAT_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat.db")
+
+def init_chat_db():
+    conn = sqlite3.connect(CHAT_DB_FILE)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_name TEXT,
+            color TEXT,
+            text TEXT,
+            timestamp TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_chat_db()
+
+def get_chat_messages(limit=60, room="roast"):
+    conn = sqlite3.connect(CHAT_DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT user_name, color, text, timestamp FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?", (room, limit))
+    rows = c.fetchall()
+    conn.close()
+    return rows[::-1]
+
+def save_chat_message(user_name, color, text, room="roast"):
+    conn = sqlite3.connect(CHAT_DB_FILE)
+    c = conn.cursor()
+    now_str = datetime.now().strftime("%I:%M %p")
+    c.execute("INSERT INTO messages (room, user_name, color, text, created_at, timestamp) VALUES (?, ?, ?, ?, ?, ?)", 
+              (room, user_name, color, text, now_str, now_str))
+    conn.commit()
+    conn.close()
 
 # ---------------------------------------------------------
 # TAB 5: RULES, SCORING & HELP CENTER (SEARCHABLE)
@@ -1502,14 +1558,202 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
 
 
 # ---------------------------------------------------------
-# MAIN APP ENTRY POINT (ORDER: Weekly, History, Draft, Keeper, Rules)
+# MAIN APP ENTRY POINT (ORDER: Weekly, History, Draft, Keeper, Rules, Roasting)
 # ---------------------------------------------------------
 def main(page: ft.Page):
     page.title = "NPK Fantasy Football League Dashboard"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 8
 
+    # --- Session Storage (Local State) ---
+    session_data = {}
+
+    def get_storage(key: str):
+        return session_data.get(key)
+
+    def set_storage(key: str, val: str):
+        session_data[key] = val
+
+    # --- Identity Prompt Modal Layer ---
+    custom_name_field = ft.TextField(
+        label="Type your name / handle",
+        visible=True,
+        border_color=ft.Colors.AMBER_400,
+        hint_text="e.g. Joey",
+    )
+
+    dd_team = ft.Dropdown(
+        label="Select your NPK team",
+        value="Other",
+        options=[ft.dropdown.Option(t) for t in LEAGUE_TEAMS],
+    )
+
+    dd_color = ft.Dropdown(
+        label="Chat Bubble Color",
+        value="Light Grey (Default)",
+        options=[ft.dropdown.Option(c) for c in CHAT_BUBBLE_COLORS.keys()],
+    )
+
+    identity_modal_card = ft.Card(
+        elevation=12,
+        content=ft.Container(
+            width=460,
+            padding=20,
+            bgcolor=BG_SURFACE_LIGHT,
+            border_radius=12,
+            content=ft.Column(
+                tight=True,
+                spacing=12,
+                controls=[
+                    ft.Text("Welcome to NPK Fantasy! 🏈", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                    ft.Text("What team do you manage in No Pain Keeper?", size=14),
+                    dd_team,
+                    ft.Text(
+                        "ℹ️ Official league team choices will auto-populate in this dropdown once the Yahoo API link finishes provisioning.",
+                        size=11,
+                        color=ft.Colors.GREY_400,
+                        italic=True,
+                    ),
+                    custom_name_field,
+                    dd_color,
+                    ft.Row(
+                        [
+                            ft.Button(
+                                "Save & Enter",
+                                on_click=lambda e: save_identity_click(e),
+                                color=ft.Colors.WHITE,
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.END,
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    identity_overlay_layer = ft.Container(
+        content=identity_modal_card,
+        alignment=ft.Alignment(0, 0),
+        bgcolor="#C8000000",
+        expand=True,
+        visible=True,
+    )
+
+    def save_identity_click(e):
+        display_name = custom_name_field.value.strip()
+        if not display_name:
+            custom_name_field.error_text = "Please enter a display name"
+            page.update()
+            return
+
+        chosen_hex = CHAT_BUBBLE_COLORS.get(dd_color.value, "#E0E0E0")
+        set_storage("chat_user_name", display_name)
+        set_storage("chat_user_color", chosen_hex)
+
+        identity_overlay_layer.visible = False
+        page.update()
+
+    # --- Chat Tab UI ---
+    chat_list = ft.ListView(
+        expand=True,
+        spacing=10,
+        auto_scroll=True,
+    )
+
+    def render_messages():
+        chat_list.controls.clear()
+        msgs = get_chat_messages()
+        current_user = get_storage("chat_user_name") or ""
+        for sender, bubble_color, text, time_str in msgs:
+            is_me = (sender == current_user)
+            text_color = ft.Colors.BLACK if bubble_color not in ["#212121", "#1B5E20", "#0D47A1"] else ft.Colors.WHITE
+            meta_color = ft.Colors.BLACK54 if text_color == ft.Colors.BLACK else ft.Colors.GREY_300
+
+            chat_list.controls.append(
+                ft.Row(
+                    controls=[
+                        ft.Container(
+                            content=ft.Column(
+                                controls=[
+                                    ft.Text(f"{sender} • {time_str}", size=11, weight=ft.FontWeight.BOLD, color=meta_color),
+                                    ft.Text(text, size=14, color=text_color),
+                                ],
+                                spacing=2,
+                                tight=True,
+                            ),
+                            bgcolor=bubble_color,
+                            border_radius=10,
+                            padding=10,
+                            width=320,
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.END if is_me else ft.MainAxisAlignment.START,
+                )
+            )
+        page.update()
+
+    txt_input = ft.TextField(
+        hint_text="Drop a roast, trade offer, or hot take...",
+        expand=True,
+        border_color=ft.Colors.AMBER_400,
+    )
+
+    def send_message_click(e):
+        user = get_storage("chat_user_name") or "Anonymous"
+        color = get_storage("chat_user_color") or "#E0E0E0"
+        msg = txt_input.value.strip()
+        if not msg:
+            return
+        save_chat_message(user, color, msg)
+        txt_input.value = ""
+        render_messages()
+
+    txt_input.on_submit = send_message_click
+
+    send_btn = ft.IconButton(
+        icon=ft.Icons.SEND_ROUNDED,
+        icon_color=ft.Colors.AMBER_400,
+        on_click=send_message_click,
+    )
+
+    btn_refresh_chat = ft.IconButton(
+        icon=ft.Icons.REFRESH,
+        tooltip="Refresh Chats",
+        on_click=lambda e: render_messages(),
+    )
+
+    roasting_tab_view = ft.Container(
+        expand=True,
+        padding=10,
+        content=ft.Column(
+            controls=[
+                ft.Row(
+                    [
+                        ft.Text("🔥 NPK Banter & Roasting Hub", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER),
+                        btn_refresh_chat,
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Divider(height=4),
+                chat_list,
+                ft.Row(controls=[txt_input, send_btn], spacing=8),
+            ],
+            expand=True,
+        ),
+    )
+
+    # --- Tab Navigation & Views ---
+    # Unread badge indicator
+    roast_badge = ft.Container(
+        width=8,
+        height=8,
+        bgcolor=ft.Colors.RED_ACCENT,
+        border_radius=4,
+        visible=False,
+    )
+
     views = [
+        roasting_tab_view,
         build_weekly_tab(page),
         build_history_tab(page),
         build_draft_tab(page),
@@ -1520,16 +1764,29 @@ def main(page: ft.Page):
     body = ft.Container(content=views[0], expand=True)
 
     def switch_tab(idx):
+        if idx == 0:
+            roast_badge.visible = False
+            render_messages()
         body.content = views[idx]
         page.update()
 
+    roast_button_content = ft.Row(
+        [
+            ft.Text("🔥 Roasting"),
+            roast_badge,
+        ],
+        spacing=4,
+        tight=True,
+    )
+
     nav_row = ft.Row(
         controls=[
-            ft.Button("Weekly Hub", on_click=lambda e: switch_tab(0)),
-            ft.Button("History Archives", on_click=lambda e: switch_tab(1)),
-            ft.Button("Draft Results", on_click=lambda e: switch_tab(2)),
-            ft.Button("Keeper Roster", on_click=lambda e: switch_tab(3)),
-            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(4)),
+            ft.Button(content=roast_button_content, on_click=lambda e: switch_tab(0)),
+            ft.Button("Weekly Hub", on_click=lambda e: switch_tab(1)),
+            ft.Button("History Archives", on_click=lambda e: switch_tab(2)),
+            ft.Button("Draft Results", on_click=lambda e: switch_tab(3)),
+            ft.Button("Keeper Roster", on_click=lambda e: switch_tab(4)),
+            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(5)),
         ],
         scroll=ft.ScrollMode.ADAPTIVE,
         alignment=ft.MainAxisAlignment.CENTER,
@@ -1570,15 +1827,23 @@ def main(page: ft.Page):
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
 
+    dashboard_layout = ft.Column(
+        controls=[
+            top_bar,
+            header_content,
+            body,
+        ],
+        expand=True,
+        spacing=3,
+    )
+
     page.add(
-        ft.Column(
+        ft.Stack(
             controls=[
-                top_bar,
-                header_content,
-                body,
+                dashboard_layout,
+                identity_overlay_layer,
             ],
             expand=True,
-            spacing=3,
         )
     )
 
@@ -1596,7 +1861,6 @@ if __name__ == "__main__":
         if scope["type"] == "http":
             async def send_wrapper(message):
                 if message["type"] == "http.response.start":
-                    # Filter out Cross-Origin-Embedder-Policy header
                     headers = [
                         (k, v) for k, v in message.get("headers", [])
                         if k.lower() != b"cross-origin-embedder-policy"
