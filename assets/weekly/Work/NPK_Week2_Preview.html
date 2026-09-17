@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NPK Football Weekly - Week 2 Preview</title>
+<style>
+  @page {
+    size: letter portrait;
+    margin: 5mm 7mm 5mm 7mm;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Georgia', serif;
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+    line-height: 1.35;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 100%;
+    min-height: 268mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .masthead {
+    border-bottom: 3px double #0f172a;
+    padding-bottom: 3px;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  .sub-brand {
+    font-family: 'Arial Black', sans-serif;
+    letter-spacing: 2px;
+    font-size: 11.5px;
+    color: #991b1b;
+    text-transform: uppercase;
+    display: block;
+  }
+  .masthead h1 {
+    font-family: 'Impact', 'Arial Black', sans-serif;
+    font-size: 34px;
+    text-transform: uppercase;
+    margin: 1px 0;
+    letter-spacing: 0.8px;
+    color: #0f172a;
+    line-height: 1;
+  }
+  .deck {
+    font-style: italic;
+    font-size: 14px;
+    color: #475569;
+    font-weight: bold;
+    margin-top: 2px;
+    text-align: center;
+  }
+  .lead-in {
+    background: #f8fafc;
+    border-left: 4px solid #991b1b;
+    padding: 6px 10px;
+    font-size: 11.5px;
+    margin-bottom: 8px;
+    line-height: 1.35;
+    text-align: justify;
+  }
+  .two-column-layout {
+    display: flex;
+    gap: 14px;
+    flex-grow: 1;
+  }
+  .left-col {
+    flex: 1.22;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .right-col {
+    flex: 0.78;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #e2e8f0;
+    padding-left: 12px;
+  }
+  .matchup-card {
+    border-bottom: 1px dashed #cbd5e1;
+    padding-bottom: 4px;
+  }
+  .matchup-header {
+    background: #0f172a;
+    color: #fff;
+    font-family: 'Arial', sans-serif;
+    font-weight: bold;
+    font-size: 11.5px;
+    padding: 3px 6px;
+    display: flex;
+    justify-content: space-between;
+    border-radius: 2px;
+  }
+  .matchup-body {
+    font-size: 10.8px;
+    margin-top: 3px;
+    text-align: justify;
+    line-height: 1.28;
+  }
+  .prediction-tag {
+    font-size: 10.2px;
+    font-style: italic;
+    color: #334155;
+    background: #f1f5f9;
+    padding: 2px 5px;
+    margin-top: 2px;
+    border-left: 3px solid #059669;
+    line-height: 1.25;
+  }
+  .section-break {
+    background: #991b1b;
+    color: #fff;
+    font-family: 'Arial Black', sans-serif;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    margin: 2px 0 4px 0;
+    letter-spacing: 0.6px;
+    border-radius: 2px;
+  }
+  .leader-category {
+    font-weight: bold;
+    font-family: 'Arial', sans-serif;
+    color: #0f172a;
+    font-size: 11px;
+    margin-top: 3px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 1px;
+  }
+  .leader-item {
+    font-size: 10.5px;
+    margin-top: 1px;
+    line-height: 1.2;
+  }
+  .leader-comment {
+    font-size: 9.8px;
+    font-style: italic;
+    color: #475569;
+    margin-bottom: 3px;
+    line-height: 1.15;
+  }
+  .standings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    font-family: 'Arial', sans-serif;
+    margin-top: 3px;
+  }
+  .standings-table th, .standings-table td {
+    padding: 2px 4px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+  }
+  .standings-table th {
+    background: #334155;
+    color: #fff;
+    font-size: 10px;
+  }
+  .standings-div-row {
+    background: #f1f5f9;
+    font-weight: bold;
+    color: #0f172a;
+    font-size: 9.5px;
+    padding: 1px 4px;
+    border-top: 1px solid #cbd5e1;
+  }
+  .footer-quote {
+    text-align: center;
+    font-style: italic;
+    font-size: 11px;
+    border-top: 1.5px solid #0f172a;
+    padding-top: 3px;
+    margin-top: 4px;
+    color: #334155;
+    line-height: 1.25;
+  }
+  .footer-meta-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #cbd5e1;
+    margin-top: 2px;
+    padding-top: 2px;
+    font-size: 9.5px;
+    color: #64748b;
+    font-family: 'Arial', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  @media print {
+    body {
+      width: 100%;
+      height: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div>
+    <div class="masthead">
+      <span class="sub-brand">No Pain Keeper League • Weekly Review Gazette</span>
+      <h1>THE POSTGAME CHRONICLE</h1>
+      <div class="deck">“Overreactions, Trapdoors, and True Colors”</div>
+    </div>
+
+    <div class="lead-in">
+      Welcome to Week 2: national overreaction week across the fantasy universe. The 1-0 bracket is already swaggering through group chats pricing custom diamond championship rings, while the 0-1 contingent enters an existential crisis, frantically hovering over the waiver panic button after four bad quarters. With genuine data logged in the ledger and lineups recalibrated, the cozy illusion of preseason depth is officially shattered. Real keeper attrition starts right now.
+    </div>
+
+    <div class="two-column-layout">
+      <!-- LEFT COLUMN: ALL 6 MATCHUPS -->
+      <div class="left-col">
+        <!-- MATCHUP 1 -->
+        <div class="matchup-card">
+          <div class="matchup-header">
+            <span>SAMURAI (1-0)</span>
+            <span>TD MASTER (0-1)</span>
+          </div>
+          <div class="matchup-body">
+            Samurai enters looking crisp and balanced after dispatching Wild Card behind Trevor Lawrence's steady command and Zay Flowers' electric target volume. With Cam Skattebo demanding flex touches and Kyle Hamilton leading an aggressive secondary, Samurai brings a very dependable floor into Week 2.<br>
+            TD Master sits in urgent rebound territory after taking a 63-point beating from Super Saiyan. Lamar Jackson and Jahmyr Gibbs remain capable of dropping 70 combined points on any given Sunday, but this roster cannot afford another flatline goose egg from supplementary skill positions.
+            <div class="prediction-tag">Prediction: Lamar keeps it tight early, but Samurai's depth across the defensive front secures a narrow victory.</div>
+          </div>
+        </div>
+
+        <!-- MATCHUP 2 -->
+        <div class="matchup-card">
+          <div class="matchup-header">
+            <span>NINJA (0-1)</span>
+            <span>WILD CARD (0-1)</span>
+          </div>
+          <div class="matchup-body">
+            Ninja enters as the poster child for fantasy cruelty after dropping 211.33 points in Week 1—the second-highest score in the entire league—only to take an L. T.J. Watt is wrecking offensive game plans single-handedly, Trey McBride is commanding targets, and this roster is out for blood.<br>
+            Wild Card has plenty of soul-searching to do after an offensive dud where Kyle Pitts and George Pickens practically vanished from the stat sheet. Roquan Smith and Ladd McConkey provide solid floors, but running straight into an angry ninja squad is an unforgiving task.
+            <div class="prediction-tag">Prediction: Ninja vents opening-week frustration with an emphatic rout over a stalling Wild Card roster.</div>
+          </div>
+        </div>
+
+        <!-- MATCHUP 3 -->
+        <div class="matchup-card">
+          <div class="matchup-header">
+            <span>SILENTXECUTION (1-0)</span>
+            <span>MAD SCIENTIST (1-0)</span>
+          </div>
+          <div class="matchup-body">
+            SilentXecution silenced draft-night critics in emphatic fashion, riding Caleb Williams' nuclear outing and an unstoppable wideout barrage from Amon-Ra St. Brown and Chris Olave. The backfield remains a weekly high-wire act, but an elite passing game can hide plenty of roster flaws.<br>
+            The Mad Scientist pulled off an absolute laboratory heist in Week 1, surviving 36 benched points from Jalen Coker thanks to Jaxson Dart and D'Andre Swift. With Saquon Barkley and Kyren Williams commanding the ground game, the Scientist brings heavyweight balance.
+            <div class="prediction-tag">Prediction: In a wire-to-wire shootout, Mad Scientist's backfield volume edges out Caleb Williams' aerial show.</div>
+          </div>
+        </div>
+
+        <!-- MATCHUP 4 -->
+        <div class="matchup-card">
+          <div class="matchup-header">
+            <span>CINDERELLA BOYZ (1-0)</span>
+            <span>JACK WAGONS (0-1)</span>
+          </div>
+          <div class="matchup-body">
+            The Cinderella Boyz roll into Week 2 riding high after a clinical 188-point showing paced by Ashton Jeanty and Javonte Williams. Christian McCaffrey remains the ultimate fantasy trump card, providing Cinderella an unmatched weekly baseline when paired with Puka Nacua.<br>
+            Jack Wagons ran straight into a buzzsaw last week despite monster shifts from Jonathan Taylor and Kenneth Walker III. With Joe Burrow looking to settle in downfield and Maxx Crosby headlining a stingy defensive front, Wagons has the punch to trade blows with anyone.
+            <div class="prediction-tag">Prediction: Jack Wagons' rush attack keeps heat on early, but CMC and Jeanty prove too much to contain late.</div>
+          </div>
+        </div>
+
+        <!-- MATCHUP 5 -->
+        <div class="matchup-card">
+          <div class="matchup-header">
+            <span>MOTORBOATERS (1-0)</span>
+            <span>SUPER SAIYAN (1-0)</span>
+          </div>
+          <div class="matchup-body">
+            This is the undisputed heavyweight bout of Week 2. MotorBoaters set the league scoring watermark (218.70) behind Justin Jefferson, JSN, and David Montgomery. With George Kittle due for positive regression and Fred Warner anchoring the middle, this unit is terrifying.<br>
+            Super Saiyan answers with equal firepower after cruising to 207.25 points behind Jalen Hurts, Bijan Robinson, and Christian Watson. Zack Baun leads an active IDP unit capable of answering the Boaters' explosive air assault blow for blow.
+            <div class="prediction-tag">Prediction: An epic track meet decided Monday night, where MotorBoaters' wideout ceiling narrowly prevails.</div>
+          </div>
+        </div>
+
+        <!-- MATCHUP 6 -->
+        <div class="matchup-card">
+          <div class="matchup-header">
+            <span>TBONE DIVA (0-1)</span>
+            <span>RAZINUDOWN (0-1)</span>
+          </div>
+          <div class="matchup-body">
+            Tbone Diva Manglers stumbled badly in the opener, finishing last in league scoring after Matthew Stafford and Ja'Marr Chase failed to fire. To avoid an 0-2 hole, Tbone needs immediate life from Quinshon Judkins and an IDP bounce-back from Foyesade Oluokun.<br>
+            RAZINUDOWN was on the wrong end of a gut-wrenching 2.2-point heartbreak despite monster days from Josh Allen and Derrick Henry. With Brock Bowers back in the fold and Jaylen Waddle due for targets, RAZINUDOWN's offensive baseline remains among the very best.
+            <div class="prediction-tag">Prediction: Josh Allen and King Henry roll downhill against a reeling Diva defense to earn RAZIN's first win.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: STATS LEADERS + STANDINGS -->
+      <div class="right-col">
+        <!-- BONUS LEADERBOARDS -->
+        <div class="section-break" style="margin-top:0;">📊 Bonus Leaderboards</div>
+
+        <div class="leader-category">🔥 Best Offense</div>
+        <div class="leader-item">1. MotorBoaters – 142.15 pts</div>
+        <div class="leader-item">2. Super Saiyan – 137.25 pts</div>
+        <div class="leader-item">3. SilentXecution – 136.05 pts</div>
+        <div class="leader-comment">MotorBoaters and Super Saiyan proved high-volume superstars cash in early.</div>
+
+        <div class="leader-category">🛡️ Best Defense</div>
+        <div class="leader-item">1. ninja – 95.58 pts</div>
+        <div class="leader-item">2. MotorBoaters – 75.55 pts</div>
+        <div class="leader-item">3. The Mad Scientist Syndicate – 72.75 pts</div>
+        <div class="leader-comment">Ninja put on an IDP masterclass, while MotorBoaters tackled as well as they scored.</div>
+
+        <div class="leader-category">🏈 Best Special Teams</div>
+        <div class="leader-item">1. Wild Card – 13.00 pts</div>
+        <div class="leader-item">2. Super Saiyan – 12.00 pts</div>
+        <div class="leader-item">3. Tbone Diva Manglers – 11.00 pts</div>
+        <div class="leader-comment">When your tight end gives you a zero, at least Wild Card's kicking unit shows up.</div>
+
+        <div class="leader-category">📈 Season Points Leaderboard</div>
+        <div class="leader-item">1. MotorBoaters – 218.70 pts</div>
+        <div class="leader-item">2. ninja – 211.33 pts</div>
+        <div class="leader-item">3. Super Saiyan – 207.25 pts</div>
+        <div class="leader-comment">A scorching opening week trio crossing 200 points right out of the gates.</div>
+
+        <!-- CURRENT STANDINGS -->
+        <div class="section-break" style="margin-top:8px;">🏆 Current Standings</div>
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Team</th>
+              <th>W-L</th>
+              <th>PF</th>
+              <th>PA</th>
+              <th>Strk</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="standings-div-row"><td colspan="6">THE BAD</td></tr>
+            <tr>
+              <td>2</td>
+              <td>SilentXecution</td>
+              <td>1-0</td>
+              <td>194.05</td>
+              <td>165.65</td>
+              <td>W-1</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>The Cinderella Boyz</td>
+              <td>1-0</td>
+              <td>188.65</td>
+              <td>125.92</td>
+              <td>W-1</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>The Mad Scientist Syndicate</td>
+              <td>1-0</td>
+              <td>186.05</td>
+              <td>182.35</td>
+              <td>W-1</td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td>RAZINUDOWN</td>
+              <td>0-1</td>
+              <td>182.35</td>
+              <td>186.05</td>
+              <td>L-1</td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td>Jack Wagons</td>
+              <td>0-1</td>
+              <td>165.65</td>
+              <td>194.05</td>
+              <td>L-1</td>
+            </tr>
+            <tr>
+              <td>12</td>
+              <td>Tbone Diva Manglers</td>
+              <td>0-1</td>
+              <td>125.92</td>
+              <td>188.65</td>
+              <td>L-1</td>
+            </tr>
+            <tr class="standings-div-row"><td colspan="6">THE UGLY</td></tr>
+            <tr>
+              <td>1</td>
+              <td>MotorBoaters</td>
+              <td>1-0</td>
+              <td>218.70</td>
+              <td>211.33</td>
+              <td>W-1</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>Super Saiyan</td>
+              <td>1-0</td>
+              <td>207.25</td>
+              <td>145.82</td>
+              <td>W-1</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>Samurai</td>
+              <td>1-0</td>
+              <td>170.75</td>
+              <td>152.21</td>
+              <td>W-1</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td>ninja</td>
+              <td>0-1</td>
+              <td>211.33</td>
+              <td>218.70</td>
+              <td>L-1</td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td>Wild Card</td>
+              <td>0-1</td>
+              <td>152.21</td>
+              <td>170.75</td>
+              <td>L-1</td>
+            </tr>
+            <tr>
+              <td>11</td>
+              <td>TD Master</td>
+              <td>0-1</td>
+              <td>145.82</td>
+              <td>207.25</td>
+              <td>L-1</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="footer-quote">
+      <strong>🗣️ Final Word: “The Reality Check”</strong> — Week 1 created heroes and scapegoats, but Week 2 separates real contenders from early-season mirages. Don't blow up your squad over four bad quarters, lock your starters early, and remember: panic trades on Thursday morning are how seasons implode.<br>
+      Good luck in Week 2… <em>Except TD Master — may Lamar Jackson throw nothing but wobbly ducks into the turf and may your tight ends leave their cleats at home.</em>
+    </div>
+    <div class="footer-meta-bar">
+      <span>Official Preview Edition</span>
+      <span>Week 2 – 2026 Season</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
