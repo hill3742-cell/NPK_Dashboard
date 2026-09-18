@@ -2067,11 +2067,11 @@ def main(page: ft.Page):
         page.update()
 
     # Pre-built module views
-  weekly_module, weekly_nav_controls = build_weekly_tab(page)
-  history_module, history_nav_controls = build_history_tab(page)
-  draft_module = build_draft_tab(page)
-  keeper_module = build_keeper_tab(page)
-  help_module = build_help_center_tab(page)
+    weekly_module, weekly_nav_controls = build_weekly_tab(page)
+    history_module, history_nav_controls = build_history_tab(page)
+    draft_module = build_draft_tab(page)
+    keeper_module = build_keeper_tab(page)
+    help_module = build_help_center_tab(page)
 
     def make_launcher_card(title: str, subtitle: str, icon_name, on_click_action):
         return ft.Container(
