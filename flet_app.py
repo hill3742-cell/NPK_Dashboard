@@ -120,7 +120,10 @@ def get_weekly_items():
 
 
 def build_weekly_tab(page: ft.Page):
-    BASE_WIDTH = 750
+    # Responsive default: fits mobile screen width at 100%, caps at 750px on desktop
+    client_w = getattr(page, "width", None) or 750
+    base_width = int(client_w - 20) if (client_w and 300 < client_w < 750) else 750
+
     zoom_level = [1.0]
     zoom_label = ft.Text("100%", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
@@ -186,7 +189,7 @@ def build_weekly_tab(page: ft.Page):
         zoom_level[0] = val
         pct_text = f"{int(val * 100)}%"
         zoom_label.value = pct_text
-        new_w = int(BASE_WIDTH * val)
+        new_w = int(base_width * val)
 
         for card in loaded_pages:
             try:
@@ -248,7 +251,7 @@ def build_weekly_tab(page: ft.Page):
 
                 inner_widget = ft.Container(
                     content=ft.Text(text_body, selectable=True),
-                    width=BASE_WIDTH,
+                    width=base_width,
                     bgcolor=BG_SURFACE_LIGHT,
                     padding=20,
                     border_radius=8,
@@ -256,17 +259,18 @@ def build_weekly_tab(page: ft.Page):
             else:
                 inner_widget = ft.Container(
                     content=ft.Image(src=path, fit="contain"),
-                    width=BASE_WIDTH,
+                    width=base_width,
                 )
 
-            # Unconstrained viewer allowing up to 250% expansion and 4-way pan
+            # Native 4-way pan (up, down, left, right) + pinch-to-zoom
             panning_canvas = ft.InteractiveViewer(
                 content=inner_widget,
                 pan_enabled=True,
                 scale_enabled=True,
                 min_scale=0.4,
-                max_scale=2.5,
+                max_scale=3.0,
                 constrained=False,
+                boundary_margin=ft.Margin(300, 300, 300, 300),
             )
 
             loaded_pages.append(panning_canvas)
@@ -343,12 +347,16 @@ def build_weekly_tab(page: ft.Page):
         shadow=ft.BoxShadow(blur_radius=10, color="#60000000"),
     )
 
+    # Positioned capsule constrained to bottom 50px so touch gestures pass cleanly to document
     weekly_main_view = ft.Stack(
         controls=[
             viewer_container,
             ft.Container(
-                content=floating_zoom_pill,
-                alignment=ft.Alignment(0, 0.94),
+                content=ft.Row([floating_zoom_pill], alignment=ft.MainAxisAlignment.CENTER),
+                bottom=20,
+                left=0,
+                right=0,
+                height=50,
             ),
         ],
         expand=True,
