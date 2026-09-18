@@ -267,8 +267,8 @@ def build_weekly_tab(page: ft.Page):
                 scale_enabled=True,
                 min_scale=0.4,
                 max_scale=3.5,
-                pan_axis=ft.PanAxis.FREE,
-                clip_behavior=ft.ClipBehavior.NONE,
+                pan_axis="free",
+                clip_behavior="none",
             )
 
             loaded_pages.append(panning_canvas)
