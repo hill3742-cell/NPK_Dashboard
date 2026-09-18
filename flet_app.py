@@ -88,7 +88,7 @@ def safe_update(control_or_page):
 # TAB 1: WEEKLY HUB (PREVIEWS & RECAPS WITH PINCH-TO-ZOOM)
 # ---------------------------------------------------------
 def get_weekly_items():
-    items = []
+    items_dict = {}
     pattern = re.compile(
         r"^(\d{4})_W(?:eek)?_?(\d+)_?(preview|recap)(?:_p\d+)?\.(png|jpg|jpeg|webp|txt)$",
         re.IGNORECASE,
@@ -99,222 +99,265 @@ def get_weekly_items():
             match = pattern.match(fname)
             if match:
                 year, week, media_type, ext = match.groups()
-                items.append({
-                    "year": int(year),
-                    "week": int(week),
-                    "type": media_type.capitalize(),
-                    "filename": fname,
-                    "path": f"/weekly/{fname}",
-                    "ext": ext.lower(),
-                    "priority": int(week) * 10 + (2 if media_type.lower() == "recap" else 1),
-                })
+                year = int(year)
+                week = int(week)
+                m_type = media_type.capitalize()
+                key = f"{year}_W{week}_{m_type.lower()}"
+                
+                # Keep one unified entry per year/week/type
+                if key not in items_dict:
+                    items_dict[key] = {
+                        "key": key,
+                        "year": year,
+                        "week": week,
+                        "type": m_type,
+                        "priority": week * 10 + (2 if m_type.lower() == "recap" else 1),
+                    }
+
+    items = list(items_dict.values())
+    items.sort(key=lambda x: (x["year"], x["week"], x["priority"]), reverse=True)
     return items
 
 
-def build_weekly_tab(page: ft.Page) -> ft.Control:
-    content_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    status_label = ft.Text("", size=15, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
+def build_weekly_tab(page: ft.Page):
+    DEFAULT_DOC_WIDTH = 750
+    zoom_level = [1.0]
+    zoom_label = ft.Text("100%", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
-    weekly_scale = [1.0]
-    weekly_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
-    weekly_containers = []
+    current_page_idx = [0]
+    loaded_pages = []
 
-    def set_weekly_zoom(factor, reset=False):
-        if reset:
-            weekly_scale[0] = 1.0
+    page_display_col = ft.Column(
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=0,
+    )
+    page_indicator = ft.Text("Page 1 / 1", size=12, color=ft.Colors.GREY_300, weight=ft.FontWeight.BOLD)
+
+    def render_current_page():
+        total = len(loaded_pages)
+        page_display_col.controls.clear()
+        if total == 0:
+            page_display_col.controls.append(ft.Text("No document pages found.", italic=True))
+            btn_prev.disabled = True
+            btn_next.disabled = True
+            page_indicator.value = "Page 0 / 0"
         else:
-            weekly_scale[0] = max(0.4, min(2.5, round(weekly_scale[0] + factor, 2)))
+            idx = current_page_idx[0]
+            page_display_col.controls.append(loaded_pages[idx])
+            page_indicator.value = f"Page {idx + 1} / {total}"
+            btn_prev.disabled = (idx == 0)
+            btn_next.disabled = (idx >= total - 1)
 
-        weekly_zoom_label.value = f"{int(weekly_scale[0] * 100)}%"
-        new_w = int(750 * weekly_scale[0])
-        for c in weekly_containers:
-            c.width = new_w
+        safe_update(page_display_col)
+        safe_update(btn_prev)
+        safe_update(btn_next)
+        safe_update(page_indicator)
         safe_update(page)
 
-    weekly_zoom_bar = ft.Container(
+    def flip_next(e):
+        if current_page_idx[0] < len(loaded_pages) - 1:
+            current_page_idx[0] += 1
+            render_current_page()
+
+    def flip_prev(e):
+        if current_page_idx[0] > 0:
+            current_page_idx[0] -= 1
+            render_current_page()
+
+    btn_prev = ft.IconButton(
+        icon=ft.Icons.ARROW_BACK_IOS_NEW_ROUNDED,
+        icon_size=16,
+        icon_color=ft.Colors.AMBER_400,
+        tooltip="Previous Page",
+        on_click=flip_prev,
+        disabled=True,
+    )
+
+    btn_next = ft.IconButton(
+        icon=ft.Icons.ARROW_FORWARD_IOS_ROUNDED,
+        icon_size=16,
+        icon_color=ft.Colors.AMBER_400,
+        tooltip="Next Page",
+        on_click=flip_next,
+        disabled=True,
+    )
+
+    def apply_zoom(new_val):
+        val = max(0.4, min(2.5, round(new_val, 2)))
+        zoom_level[0] = val
+        pct_text = f"{int(val * 100)}%"
+        zoom_label.value = pct_text
+        new_w = int(DEFAULT_DOC_WIDTH * val)
+        for card in loaded_pages:
+            try:
+                card.content.controls[0].width = new_w
+            except Exception:
+                pass
+        safe_update(page)
+
+    def zoom_in(e):
+        apply_zoom(zoom_level[0] + 0.15)
+
+    def zoom_out(e):
+        apply_zoom(zoom_level[0] - 0.15)
+
+    def reset_zoom(e):
+        apply_zoom(1.0)
+
+    def load_item(item):
+        loaded_pages.clear()
+        current_page_idx[0] = 0
+        zoom_level[0] = 1.0
+        zoom_label.value = "100%"
+
+        y = item["year"]
+        w = item["week"]
+        t = item["type"].lower()
+
+        regex_pattern = re.compile(
+            rf"^{y}_W(?:eek)?_?0?{w}_?{t}(?:_p(\d+))?\.(png|jpg|jpeg|webp|txt)$",
+            re.IGNORECASE,
+        )
+
+        matching_files = []
+        if os.path.exists(WEEKLY_DIR):
+            for f in sorted(os.listdir(WEEKLY_DIR)):
+                m = regex_pattern.match(f)
+                if m:
+                    p_num = int(m.group(1)) if m.group(1) else 1
+                    matching_files.append((p_num, f))
+
+        matching_files.sort(key=lambda x: x[0])
+        files_to_load = [f for _, f in matching_files]
+
+        if not files_to_load and item.get("filename"):
+            files_to_load = [item["filename"]]
+
+        for p_idx, fname in enumerate(files_to_load):
+            path = f"/weekly/{fname}"
+            ext = fname.split(".")[-1].lower()
+            if ext == "txt":
+                try:
+                    with open(os.path.join(WEEKLY_DIR, fname), "r", encoding="utf-8") as tf:
+                        text_body = tf.read()
+                except Exception:
+                    text_body = "Error reading text preview."
+                c = ft.Container(
+                    content=ft.Text(text_body, selectable=True),
+                    width=DEFAULT_DOC_WIDTH,
+                    bgcolor=BG_SURFACE_LIGHT,
+                    padding=16,
+                    border_radius=8,
+                )
+            else:
+                img = ft.Image(src=path, fit="contain")
+                pinch_viewer = ft.InteractiveViewer(
+                    content=img,
+                    min_scale=0.4,
+                    max_scale=2.5,
+                    pan_enabled=True,
+                    scale_enabled=True,
+                )
+                c = ft.Container(content=pinch_viewer, width=DEFAULT_DOC_WIDTH)
+
+            card_wrapper = ft.Container(
+                content=ft.Row([c], alignment=ft.MainAxisAlignment.CENTER),
+                alignment=ft.Alignment(0, -1),
+            )
+            loaded_pages.append(card_wrapper)
+
+        render_current_page()
+
+    all_items = get_weekly_items()
+    years = sorted(list({str(i["year"]) for i in all_items}), reverse=True) or ["2026"]
+
+    previews = [i for i in all_items if i["type"].lower() == "preview"]
+    recaps = [i for i in all_items if i["type"].lower() == "recap"]
+
+    dd_year = ft.Dropdown(
+        options=[create_option(y) for y in years],
+        value=years[0],
+        width=85,
+        dense=True,
+    )
+
+    dd_prev = ft.Dropdown(
+        hint_text="Previews",
+        options=[create_option(p["key"], f"W{p['week']} Prev") for p in previews],
+        value=previews[0]["key"] if previews else None,
+        width=135,
+        dense=True,
+    )
+
+    dd_recap = ft.Dropdown(
+        hint_text="Recaps",
+        options=[create_option(r["key"], f"W{r['week']} Recap") for r in recaps],
+        value=recaps[0]["key"] if recaps else None,
+        width=135,
+        dense=True,
+    )
+
+    def on_prev_change(e):
+        match = next((i for i in previews if i["key"] == dd_prev.value), None)
+        if match:
+            load_item(match)
+
+    def on_recap_change(e):
+        match = next((i for i in recaps if i["key"] == dd_recap.value), None)
+        if match:
+            load_item(match)
+
+    dd_prev.on_change = on_prev_change
+    dd_recap.on_change = on_recap_change
+
+    if previews:
+        load_item(previews[0])
+    elif recaps:
+        load_item(recaps[0])
+
+    floating_zoom_pill = ft.Container(
         content=ft.Row(
-            [
-                ft.Text("Zoom / Pinch:", weight=ft.FontWeight.BOLD, size=13),
-                ft.Button("➖", on_click=lambda e: set_weekly_zoom(-0.25)),
-                weekly_zoom_label,
-                ft.Button("➕", on_click=lambda e: set_weekly_zoom(0.25)),
-                ft.Button("↺ Reset", on_click=lambda e: set_weekly_zoom(0, reset=True)),
+            controls=[
+                ft.IconButton(icon=ft.Icons.REMOVE, icon_size=18, tooltip="Zoom Out", on_click=zoom_out),
+                zoom_label,
+                ft.IconButton(icon=ft.Icons.ADD, icon_size=18, tooltip="Zoom In", on_click=zoom_in),
+                ft.Container(width=1, height=18, bgcolor=ft.Colors.WHITE24),
+                btn_prev,
+                page_indicator,
+                btn_next,
+                ft.Container(width=1, height=18, bgcolor=ft.Colors.WHITE24),
+                ft.TextButton("Reset", on_click=reset_zoom),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
-            spacing=6,
+            spacing=4,
+            tight=True,
         ),
-        bgcolor=BG_SURFACE_LIGHT,
-        padding=6,
-        border_radius=8,
+        bgcolor="#E020232A",
+        border_radius=25,
+        padding=ft.Padding(12, 2, 12, 2),
+        shadow=ft.BoxShadow(blur_radius=10, color="#60000000"),
     )
 
-    weekly_controls_column = ft.Column(
-        controls=[
-            ft.Text("", size=1),
-            status_label,
-            weekly_zoom_bar,
-        ],
-        spacing=8,
-        visible=True,
-    )
-
-    btn_toggle_controls = ft.TextButton(
-        "▲ Hide Controls / Fullscreen",
-        icon=ft.Icons.KEYBOARD_ARROW_UP,
-    )
-
-    def toggle_weekly_controls(e):
-        weekly_controls_column.visible = not weekly_controls_column.visible
-        if weekly_controls_column.visible:
-            btn_toggle_controls.text = "▲ Hide Controls / Fullscreen"
-            btn_toggle_controls.icon = ft.Icons.KEYBOARD_ARROW_UP
-        else:
-            btn_toggle_controls.text = "▼ Show Controls & Zoom Bar"
-            btn_toggle_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
-        safe_update(page)
-
-    btn_toggle_controls.on_click = toggle_weekly_controls
-
-    def display_week_group(year: int, week: int, media_type: str):
-        content_display.controls.clear()
-        weekly_containers.clear()
-        weekly_scale[0] = 1.0
-        weekly_zoom_label.value = "100%"
-
-        items = get_weekly_items()
-        matching_pages = [
-            i for i in items
-            if i["year"] == year and i["week"] == week and i["type"] == media_type
-        ]
-
-        if not matching_pages:
-            status_label.value = "No Previews or Recaps found for this selection."
-            content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
-        else:
-            status_label.value = f"Showing: {year} Week {week} {media_type}"
-            for page_item in matching_pages:
-                if page_item["ext"] in ["png", "jpg", "jpeg", "webp"]:
-                    pinch_viewer = ft.InteractiveViewer(
-                        content=ft.Image(src=page_item["path"], fit="contain"),
-                        min_scale=0.4,
-                        max_scale=2.5,
-                        pan_enabled=True,
-                        scale_enabled=True,
-                    )
-                    c = ft.Container(content=pinch_viewer, width=750)
-                    weekly_containers.append(c)
-
-                    scrollable_row = ft.Row(
-                        controls=[c],
-                        scroll=ft.ScrollMode.ADAPTIVE,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    )
-                    content_display.controls.append(
-                        ft.Card(
-                            content=ft.Container(content=scrollable_row, padding=6),
-                            margin=ft.Margin(0, 6, 0, 6),
-                        )
-                    )
-                elif page_item["ext"] == "txt":
-                    full_path = os.path.join(WEEKLY_DIR, page_item["filename"])
-                    try:
-                        with open(full_path, "r", encoding="utf-8") as f:
-                            text_content = f.read()
-                    except Exception:
-                        text_content = "Could not read text file."
-
-                    content_display.controls.append(
-                        ft.Container(
-                            content=ft.Text(text_content, size=15),
-                            padding=15,
-                            bgcolor=BG_SURFACE_LIGHT,
-                            border_radius=8,
-                        )
-                    )
-        safe_update(content_display)
-
-    dd_year = ft.Dropdown(label="Year", width=110)
-    dd_preview = ft.Dropdown(label="Past Previews", width=160)
-    dd_recap = ft.Dropdown(label="Past Recaps", width=160)
-
-    weekly_controls_column.controls[0] = ft.Row([dd_year, dd_preview, dd_recap], wrap=True, spacing=10)
-
-    def on_selection_change(e):
-        val = e.control.value
-        if not val:
-            return
-        parts = val.split("_")
-        sel_year, sel_week, sel_type = int(parts[0]), int(parts[1]), parts[2]
-
-        if e.control == dd_preview:
-            dd_recap.value = None
-        else:
-            dd_preview.value = None
-
-        display_week_group(sel_year, sel_week, sel_type)
-
-    def populate_controls(selected_year=None):
-        items = get_weekly_items()
-        available_years = sorted(list(set(i["year"] for i in items)), reverse=True)
-        current_year = datetime.now().year
-
-        if not available_years:
-            available_years = [current_year]
-
-        target_year = selected_year or (current_year if current_year in available_years else available_years[0])
-        dd_year.options = [create_option(str(y)) for y in available_years]
-        dd_year.value = str(target_year)
-
-        year_items = [i for i in items if i["year"] == target_year]
-
-        preview_weeks = sorted(list(set(i["week"] for i in year_items if i["type"] == "Preview")), reverse=True)
-        dd_preview.options = [create_option(f"{target_year}_{w}_Preview", f"Week {w} Preview") for w in preview_weeks]
-        dd_preview.value = None
-
-        recap_weeks = sorted(list(set(i["week"] for i in year_items if i["type"] == "Recap")), reverse=True)
-        dd_recap.options = [create_option(f"{target_year}_{w}_Recap", f"Week {w} Recap") for w in recap_weeks]
-        dd_recap.value = None
-
-        if year_items:
-            latest = max(year_items, key=lambda x: x["priority"])
-            key_val = f"{latest['year']}_{latest['week']}_{latest['type']}"
-            if latest["type"] == "Preview":
-                dd_preview.value = key_val
-            else:
-                dd_recap.value = key_val
-            display_week_group(latest["year"], latest["week"], latest["type"])
-        else:
-            status_label.value = "No Previews or Recaps found for this season."
-            content_display.controls.clear()
-            content_display.controls.append(ft.Text("Add files to assets/weekly/ to view them here.", italic=True))
-            safe_update(content_display)
-
-    dd_year.on_change = lambda e: populate_controls(int(dd_year.value))
-    dd_preview.on_change = on_selection_change
-    dd_recap.on_change = on_selection_change
-
-    populate_controls()
-
-    fixed_top_header = ft.Column(
-        controls=[
-            ft.Row([btn_toggle_controls], alignment=ft.MainAxisAlignment.END),
-            weekly_controls_column,
-            ft.Divider(height=10),
-        ],
-        spacing=4,
-    )
-
-    scrollable_viewer = ft.Column(
-        controls=[content_display],
+    doc_scroll = ft.Column(
+        controls=[page_display_col],
         scroll=ft.ScrollMode.ADAPTIVE,
         expand=True,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
     )
 
-    return ft.Column(
-        controls=[fixed_top_header, scrollable_viewer],
+    weekly_main_view = ft.Stack(
+        controls=[
+            doc_scroll,
+            ft.Container(
+                content=floating_zoom_pill,
+                alignment=ft.Alignment(0, 0.94),
+            ),
+        ],
         expand=True,
-        spacing=5,
     )
+
+    header_controls = ft.Row([dd_year, dd_prev, dd_recap], spacing=6)
+    return weekly_main_view, header_controls
 
 
 # ---------------------------------------------------------
@@ -1493,16 +1536,17 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
 
     def refresh_help_articles(query=""):
         filtered_list.controls.clear()
-        q = query.strip().lower()
+        raw_words = query.strip().lower().split()
         cat = current_category[0]
 
         matched = []
         for art in articles:
             if cat != "All" and art["category"] != cat:
                 continue
-            if q:
-                match_text = (art["title"] + " " + art["keywords"] + " " + art["category"]).lower()
-                if q not in match_text:
+            if raw_words:
+                target_blob = f"{art['title']} {art['keywords']} {art['category']}".lower()
+                # Check if all typed search terms appear anywhere in title, category, or keywords
+                if not all(w in target_blob for w in raw_words):
                     continue
             matched.append(art)
 
@@ -1510,7 +1554,7 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
             filtered_list.controls.append(
                 ft.Container(
                     content=ft.Text(
-                        f"No rules or articles matched '{query}'. Try searching 'bad', 'ugly', 'draft', 'sack', 'payout', or 'keeper'.",
+                        f"No rules or articles matched '{query}'. Try searching terms like 'bad', 'ugly', 'draft', 'sack', 'payout', or 'keeper'.",
                         italic=True,
                         size=15,
                     ),
@@ -1923,59 +1967,143 @@ def main(page: ft.Page):
         padding=4,
     )
 
-    # Views list: Weekly Hub is now index 0 since chat is accessed from top-right
-    views = [
-        build_weekly_tab(page),
-        build_history_tab(page),
-        build_draft_tab(page),
-        build_keeper_tab(page),
-        build_help_center_tab(page),
-    ]
+    # --- Screen Navigation State ---
+    current_view_container = ft.Container(expand=True)
 
-    body = ft.Container(content=views[0], expand=True)
-
-    def switch_tab(idx):
-        body.content = views[idx]
-        check_unread()
+    def close_to_home(e=None):
+        top_bar.visible = True
+        master_divider.visible = True
+        current_view_container.content = home_launcher_view
         page.update()
 
-    nav_row = ft.Row(
+    def open_fullscreen_module(title: str, content_control: ft.Control, custom_header_left: ft.Control = None):
+        top_bar.visible = False
+        master_divider.visible = False
+
+        left_side = custom_header_left if custom_header_left else ft.Text(
+            title, size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER
+        )
+
+        fullscreen_layout = ft.Column(
+            controls=[
+                ft.Row(
+                    controls=[
+                        left_side,
+                        ft.Row(
+                            [
+                                chat_trigger_btn,
+                                ft.IconButton(
+                                    icon=ft.Icons.CLOSE,
+                                    icon_color=ft.Colors.WHITE70,
+                                    tooltip="Back to Home Menu",
+                                    on_click=close_to_home,
+                                ),
+                            ],
+                            spacing=4,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Divider(height=2),
+                ft.Container(content=content_control, expand=True),
+            ],
+            expand=True,
+            spacing=2,
+        )
+        current_view_container.content = fullscreen_layout
+        page.update()
+
+    # Pre-built module views
+    weekly_module, weekly_nav_controls = build_weekly_tab(page)
+    history_module = build_history_tab(page)
+    draft_module = build_draft_tab(page)
+    keeper_module = build_keeper_tab(page)
+    help_module = build_help_center_tab(page)
+
+    def make_launcher_card(title: str, subtitle: str, icon_name, on_click_action):
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Icon(icon_name, size=38, color=ACCENT_AMBER),
+                    ft.Text(title, size=16, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                    ft.Text(subtitle, size=12, color=ft.Colors.GREY_400, text_align=ft.TextAlign.CENTER),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=6,
+            ),
+            width=165,
+            height=140,
+            bgcolor=BG_SURFACE_LIGHT,
+            border_radius=12,
+            padding=10,
+            ink=True,
+            on_click=on_click_action,
+        )
+
+    home_launcher_view = ft.Column(
         controls=[
-            ft.Button("Weekly Hub", on_click=lambda e: switch_tab(0)),
-            ft.Button("History Archives", on_click=lambda e: switch_tab(1)),
-            ft.Button("Draft Results", on_click=lambda e: switch_tab(2)),
-            ft.Button("Keeper Roster", on_click=lambda e: switch_tab(3)),
-            ft.Button("Rules & Help Center", on_click=lambda e: switch_tab(4)),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Welcome to NPK League Hub", size=20, weight=ft.FontWeight.BOLD),
+                        ft.Text("Select a module below to open full screen:", size=13, color=ft.Colors.GREY_400),
+                    ],
+                    spacing=2,
+                ),
+                padding=ft.Padding(0, 8, 0, 12),
+            ),
+            ft.Row(
+                controls=[
+                    make_launcher_card(
+                        "Weekly Hub",
+                        "Previews, recaps & stats",
+                        ft.Icons.AUTO_STORIES_ROUNDED,
+                        lambda e: open_fullscreen_module("Weekly Previews & Recaps", weekly_module, custom_header_left=weekly_nav_controls),
+                    ),
+                    make_launcher_card(
+                        "History Archives",
+                        "Past season graphics",
+                        ft.Icons.HISTORY_ROUNDED,
+                        lambda e: open_fullscreen_module("Historical Archives", history_module),
+                    ),
+                    make_launcher_card(
+                        "Draft Results",
+                        "Searchable board & picks",
+                        ft.Icons.FORMAT_LIST_NUMBERED_ROUNDED,
+                        lambda e: open_fullscreen_module("Draft Results & History", draft_module),
+                    ),
+                    make_launcher_card(
+                        "Keeper Roster",
+                        "Calculated costs & traded resets",
+                        ft.Icons.SECURITY_ROUNDED,
+                        lambda e: open_fullscreen_module("Franchise Keeper Roster", keeper_module),
+                    ),
+                    make_launcher_card(
+                        "Rules & Help",
+                        "Scoring, payouts & divisions",
+                        ft.Icons.HELP_OUTLINE_ROUNDED,
+                        lambda e: open_fullscreen_module("Rules, Scoring & Help Center", help_module),
+                    ),
+                ],
+                wrap=True,
+                spacing=14,
+                run_spacing=14,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
         ],
         scroll=ft.ScrollMode.ADAPTIVE,
-        alignment=ft.MainAxisAlignment.CENTER,
+        expand=True,
     )
 
-    header_content = ft.Column(
-        controls=[
-            nav_row,
-            ft.Divider(height=8),
-        ],
-        spacing=4,
-        visible=True,
-    )
+    current_view_container.content = home_launcher_view
 
-    btn_toggle_master_header = ft.IconButton(
-        icon=ft.Icons.UNFOLD_LESS,
-        tooltip="Toggle Main Nav Bar",
-    )
-
-    def toggle_master_header(e):
-        header_content.visible = not header_content.visible
-        btn_toggle_master_header.icon = ft.Icons.UNFOLD_MORE if not header_content.visible else ft.Icons.UNFOLD_LESS
-        page.update()
-
-    btn_toggle_master_header.on_click = toggle_master_header
+    master_divider = ft.Divider(height=6)
 
     top_bar = ft.Row(
         controls=[
-            ft.Text("🏈 NPK FF League", weight=ft.FontWeight.BOLD, size=15, color=ACCENT_AMBER),
-            ft.Row([chat_trigger_btn, btn_toggle_master_header], spacing=4),
+            ft.Text("🏈 NPK FF League", weight=ft.FontWeight.BOLD, size=16, color=ACCENT_AMBER),
+            chat_trigger_btn,
         ],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
@@ -1983,11 +2111,11 @@ def main(page: ft.Page):
     dashboard_layout = ft.Column(
         controls=[
             top_bar,
-            header_content,
-            body,
+            master_divider,
+            current_view_container,
         ],
         expand=True,
-        spacing=3,
+        spacing=2,
     )
 
     page.add(
