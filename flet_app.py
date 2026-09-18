@@ -127,23 +127,22 @@ def build_weekly_tab(page: ft.Page):
     current_page_idx = [0]
     loaded_pages = []
 
-    page_display_col = ft.Column(
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        spacing=0,
+    page_display_col = ft.Container(
+        alignment=ft.Alignment(0, 0),
+        expand=True,
     )
     page_indicator = ft.Text("Page 1 / 1", size=12, color=ft.Colors.GREY_300, weight=ft.FontWeight.BOLD)
 
     def render_current_page():
         total = len(loaded_pages)
-        page_display_col.controls.clear()
         if total == 0:
-            page_display_col.controls.append(ft.Text("No document pages found.", italic=True))
+            page_display_col.content = ft.Text("No document pages found.", italic=True)
             btn_prev.disabled = True
             btn_next.disabled = True
             page_indicator.value = "Page 0 / 0"
         else:
             idx = current_page_idx[0]
-            page_display_col.controls.append(loaded_pages[idx])
+            page_display_col.content = loaded_pages[idx]
             page_indicator.value = f"Page {idx + 1} / {total}"
             btn_prev.disabled = (idx == 0)
             btn_next.disabled = (idx >= total - 1)
@@ -154,15 +153,23 @@ def build_weekly_tab(page: ft.Page):
         safe_update(page_indicator)
         safe_update(page)
 
-    def flip_next(e):
+    def flip_next(e=None):
         if current_page_idx[0] < len(loaded_pages) - 1:
             current_page_idx[0] += 1
             render_current_page()
 
-    def flip_prev(e):
+    def flip_prev(e=None):
         if current_page_idx[0] > 0:
             current_page_idx[0] -= 1
             render_current_page()
+
+    # Touch swipe velocity handler: swipe left -> next page, swipe right -> prev page
+    def on_drag_end(e: ft.DragEndEvent):
+        if e.primary_velocity is not None:
+            if e.primary_velocity < -250:  # Swiped Left
+                flip_next()
+            elif e.primary_velocity > 250:  # Swiped Right
+                flip_prev()
 
     btn_prev = ft.IconButton(
         icon=ft.Icons.ARROW_BACK_IOS_NEW_ROUNDED,
@@ -183,14 +190,15 @@ def build_weekly_tab(page: ft.Page):
     )
 
     def apply_zoom(new_val):
-        val = max(0.4, min(2.5, round(new_val, 2)))
+        val = max(0.3, min(3.5, round(new_val, 2)))
         zoom_level[0] = val
         pct_text = f"{int(val * 100)}%"
         zoom_label.value = pct_text
         new_w = int(DEFAULT_DOC_WIDTH * val)
-        for card in loaded_pages:
+        for c in loaded_pages:
             try:
-                card.content.controls[0].width = new_w
+                # Target the inner image/text container inside the gesture detector
+                c.content.content.width = new_w
             except Exception:
                 pass
         safe_update(page)
@@ -253,18 +261,26 @@ def build_weekly_tab(page: ft.Page):
                 img = ft.Image(src=path, fit="contain")
                 pinch_viewer = ft.InteractiveViewer(
                     content=img,
-                    min_scale=0.4,
-                    max_scale=2.5,
+                    min_scale=0.3,
+                    max_scale=3.5,
                     pan_enabled=True,
                     scale_enabled=True,
+                    constrained=False,
+                    boundary_margin=600,
                 )
                 c = ft.Container(content=pinch_viewer, width=DEFAULT_DOC_WIDTH)
 
-            card_wrapper = ft.Container(
-                content=ft.Row([c], alignment=ft.MainAxisAlignment.CENTER),
-                alignment=ft.Alignment(0, -1),
+            # Wrap in GestureDetector for edge swipe gestures
+            swipe_gesture_wrapper = ft.GestureDetector(
+                content=ft.Container(
+                    content=c,
+                    alignment=ft.Alignment(0, 0),
+                    expand=True,
+                ),
+                on_horizontal_drag_end=on_drag_end,
+                expand=True,
             )
-            loaded_pages.append(card_wrapper)
+            loaded_pages.append(swipe_gesture_wrapper)
 
         render_current_page()
 
@@ -338,16 +354,9 @@ def build_weekly_tab(page: ft.Page):
         shadow=ft.BoxShadow(blur_radius=10, color="#60000000"),
     )
 
-    doc_scroll = ft.Column(
-        controls=[page_display_col],
-        scroll=ft.ScrollMode.ADAPTIVE,
-        expand=True,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-    )
-
     weekly_main_view = ft.Stack(
         controls=[
-            doc_scroll,
+            page_display_col,
             ft.Container(
                 content=floating_zoom_pill,
                 alignment=ft.Alignment(0, 0.94),
