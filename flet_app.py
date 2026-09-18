@@ -1692,7 +1692,7 @@ def main(page: ft.Page):
         alignment=ft.Alignment(0, 0),
         bgcolor="#C8000000",
         expand=True,
-        visible=True,
+        visible=False,
     )
 
     def save_identity_click(e):
@@ -1702,13 +1702,13 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Automatically assign the sequential color for this user
         assigned_hex = resolve_user_color(display_name)
         set_storage("chat_user_name", display_name)
+        set_storage("chat_user_team", dd_team.value)
         set_storage("chat_user_color", assigned_hex)
 
         identity_overlay_layer.visible = False
-        page.update()
+        launch_chat_dialog(pending_room_selection[0])
 
     # --- Dual Room Chat Modals & Top-Right Flaming Swap Icon ---
     active_room = ["roast"]
@@ -1822,7 +1822,9 @@ def main(page: ft.Page):
         ),
     )
 
-    def open_room(room_key: str):
+    pending_room_selection = ["roast"]
+
+    def launch_chat_dialog(room_key: str):
         active_room[0] = room_key
         last_seen_msg_id[0] = get_latest_message_id()
         badge_dot.visible = False
@@ -1838,6 +1840,16 @@ def main(page: ft.Page):
         render_messages()
         chat_dialog.open = True
         page.update()
+
+    def open_room(room_key: str):
+        current_user = get_storage("chat_user_name")
+        if not current_user:
+            pending_room_selection[0] = room_key
+            room_selector_dialog.open = False
+            identity_overlay_layer.visible = True
+            page.update()
+        else:
+            launch_chat_dialog(room_key)
 
     room_selector_dialog = ft.AlertDialog(
         title=ft.Text("Select Chat Room", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
