@@ -125,8 +125,7 @@ def build_weekly_tab(page: ft.Page):
     zoom_label = ft.Text("100%", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
     current_page_idx = [0]
-    # List of (scroll_container, content_widget)
-    loaded_page_items = []
+    loaded_pages = []
 
     viewer_container = ft.Container(
         expand=True,
@@ -135,7 +134,7 @@ def build_weekly_tab(page: ft.Page):
     page_indicator = ft.Text("Page 1 / 1", size=12, color=ft.Colors.GREY_300, weight=ft.FontWeight.BOLD)
 
     def render_current_page():
-        total = len(loaded_page_items)
+        total = len(loaded_pages)
         if total == 0:
             viewer_container.content = ft.Text("No document pages found.", italic=True)
             btn_prev.disabled = True
@@ -143,7 +142,7 @@ def build_weekly_tab(page: ft.Page):
             page_indicator.value = "Page 0 / 0"
         else:
             idx = current_page_idx[0]
-            viewer_container.content = loaded_page_items[idx][0]
+            viewer_container.content = loaded_pages[idx]
             page_indicator.value = f"Page {idx + 1} / {total}"
             btn_prev.disabled = (idx == 0)
             btn_next.disabled = (idx >= total - 1)
@@ -155,7 +154,7 @@ def build_weekly_tab(page: ft.Page):
         safe_update(page)
 
     def flip_next(e=None):
-        if current_page_idx[0] < len(loaded_page_items) - 1:
+        if current_page_idx[0] < len(loaded_pages) - 1:
             current_page_idx[0] += 1
             render_current_page()
 
@@ -183,14 +182,18 @@ def build_weekly_tab(page: ft.Page):
     )
 
     def apply_zoom(new_val):
-        val = max(0.4, min(3.0, round(new_val, 2)))
+        val = max(0.4, min(3.5, round(new_val, 2)))
         zoom_level[0] = val
         pct_text = f"{int(val * 100)}%"
         zoom_label.value = pct_text
         new_w = int(BASE_WIDTH * val)
 
-        for _, widget in loaded_page_items:
-            widget.width = new_w
+        for card in loaded_pages:
+            try:
+                # Target the inner container holding the image/text inside InteractiveViewer
+                card.content.width = new_w
+            except Exception:
+                pass
 
         safe_update(viewer_container)
         safe_update(zoom_label)
@@ -206,7 +209,7 @@ def build_weekly_tab(page: ft.Page):
         apply_zoom(1.0)
 
     def load_item(item):
-        loaded_page_items.clear()
+        loaded_pages.clear()
         current_page_idx[0] = 0
         zoom_level[0] = 1.0
         zoom_label.value = "100%"
@@ -252,25 +255,23 @@ def build_weekly_tab(page: ft.Page):
                     border_radius=8,
                 )
             else:
-                inner_widget = ft.Image(
-                    src=path,
+                inner_widget = ft.Container(
+                    content=ft.Image(src=path, fit="contain"),
                     width=BASE_WIDTH,
-                    fit="contain",
                 )
 
-            # Two-way free scroll container (vertical + horizontal) for free finger dragging
-            pan_scroll_box = ft.ListView(
-                controls=[
-                    ft.Row(
-                        controls=[inner_widget],
-                        scroll=ft.ScrollMode.ALWAYS,
-                    )
-                ],
-                scroll=ft.ScrollMode.ALWAYS,
-                expand=True,
+            # Native Flutter free pan viewer: handles dragging up/down/left/right seamlessly
+            panning_canvas = ft.InteractiveViewer(
+                content=inner_widget,
+                pan_enabled=True,
+                scale_enabled=True,
+                min_scale=0.4,
+                max_scale=3.5,
+                pan_axis=ft.PanAxis.FREE,
+                clip_behavior=ft.ClipBehavior.NONE,
             )
 
-            loaded_page_items.append((pan_scroll_box, inner_widget))
+            loaded_pages.append(panning_canvas)
 
         render_current_page()
 
