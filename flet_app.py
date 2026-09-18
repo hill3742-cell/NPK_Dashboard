@@ -120,41 +120,42 @@ def get_weekly_items():
 
 
 def build_weekly_tab(page: ft.Page):
-    DEFAULT_DOC_WIDTH = 750
+    BASE_WIDTH = 750
     zoom_level = [1.0]
     zoom_label = ft.Text("100%", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
     current_page_idx = [0]
-    loaded_pages = []
+    # List of tuples: (wrapper_container, target_widget, widget_type)
+    loaded_page_data = []
 
-    page_display_container = ft.Container(
-        alignment=ft.Alignment(0, 0),
+    viewer_viewport = ft.Container(
+        alignment=ft.Alignment(0, -1),
         expand=True,
     )
     page_indicator = ft.Text("Page 1 / 1", size=12, color=ft.Colors.GREY_300, weight=ft.FontWeight.BOLD)
 
     def render_current_page():
-        total = len(loaded_pages)
+        total = len(loaded_page_data)
         if total == 0:
-            page_display_container.content = ft.Text("No document pages found.", italic=True)
+            viewer_viewport.content = ft.Text("No document pages found.", italic=True)
             btn_prev.disabled = True
             btn_next.disabled = True
             page_indicator.value = "Page 0 / 0"
         else:
             idx = current_page_idx[0]
-            page_display_container.content = loaded_pages[idx]
+            viewer_viewport.content = loaded_page_data[idx][0]
             page_indicator.value = f"Page {idx + 1} / {total}"
             btn_prev.disabled = (idx == 0)
             btn_next.disabled = (idx >= total - 1)
 
-        safe_update(page_display_container)
+        safe_update(viewer_viewport)
         safe_update(btn_prev)
         safe_update(btn_next)
         safe_update(page_indicator)
         safe_update(page)
 
     def flip_next(e=None):
-        if current_page_idx[0] < len(loaded_pages) - 1:
+        if current_page_idx[0] < len(loaded_page_data) - 1:
             current_page_idx[0] += 1
             render_current_page()
 
@@ -186,13 +187,16 @@ def build_weekly_tab(page: ft.Page):
         zoom_level[0] = val
         pct_text = f"{int(val * 100)}%"
         zoom_label.value = pct_text
-        new_w = int(DEFAULT_DOC_WIDTH * val)
-        for c in loaded_pages:
-            try:
-                # Direct resize of the document child container
-                c.content.content.width = new_w
-            except Exception:
-                pass
+        new_w = int(BASE_WIDTH * val)
+
+        for _, target_widget, widget_type in loaded_page_data:
+            if widget_type == "image":
+                target_widget.width = new_w
+            elif widget_type == "text":
+                target_widget.width = new_w
+
+        safe_update(viewer_viewport)
+        safe_update(zoom_label)
         safe_update(page)
 
     def zoom_in(e):
@@ -205,7 +209,7 @@ def build_weekly_tab(page: ft.Page):
         apply_zoom(1.0)
 
     def load_item(item):
-        loaded_pages.clear()
+        loaded_page_data.clear()
         current_page_idx[0] = 0
         zoom_level[0] = 1.0
         zoom_label.value = "100%"
@@ -233,7 +237,7 @@ def build_weekly_tab(page: ft.Page):
         if not files_to_load and item.get("filename"):
             files_to_load = [item["filename"]]
 
-        for p_idx, fname in enumerate(files_to_load):
+        for fname in files_to_load:
             path = f"/weekly/{fname}"
             ext = fname.split(".")[-1].lower()
             if ext == "txt":
@@ -242,32 +246,49 @@ def build_weekly_tab(page: ft.Page):
                         text_body = tf.read()
                 except Exception:
                     text_body = "Error reading text preview."
-                inner_content = ft.Container(
+
+                txt_widget = ft.Container(
                     content=ft.Text(text_body, selectable=True),
-                    width=DEFAULT_DOC_WIDTH,
+                    width=BASE_WIDTH,
                     bgcolor=BG_SURFACE_LIGHT,
-                    padding=16,
+                    padding=20,
                     border_radius=8,
                 )
+                
+                # Dual-axis scroll allows free pan up, down, left, right
+                scroll_wrapper = ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[txt_widget],
+                            scroll=ft.ScrollMode.ADAPTIVE,
+                            alignment=ft.MainAxisAlignment.CENTER,
+                        )
+                    ],
+                    scroll=ft.ScrollMode.ADAPTIVE,
+                    expand=True,
+                )
+                loaded_page_data.append((scroll_wrapper, txt_widget, "text"))
+
             else:
-                img = ft.Image(src=path, fit="contain")
-                inner_content = ft.Container(content=img, width=DEFAULT_DOC_WIDTH)
+                img_widget = ft.Image(
+                    src=path,
+                    width=BASE_WIDTH,
+                    fit="contain",
+                )
 
-            # Native Flutter InteractiveViewer handles 2D panning and pinch zoom cleanly
-            pinch_viewer = ft.InteractiveViewer(
-                content=inner_content,
-                min_scale=0.5,
-                max_scale=3.5,
-                pan_enabled=True,
-                scale_enabled=True,
-            )
-
-            card_wrapper = ft.Container(
-                content=pinch_viewer,
-                alignment=ft.Alignment(0, -1),
-                expand=True,
-            )
-            loaded_pages.append(card_wrapper)
+                # 2D free panning canvas using adaptive nested scroll
+                scroll_wrapper = ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[img_widget],
+                            scroll=ft.ScrollMode.ADAPTIVE,
+                            alignment=ft.MainAxisAlignment.CENTER,
+                        )
+                    ],
+                    scroll=ft.ScrollMode.ADAPTIVE,
+                    expand=True,
+                )
+                loaded_page_data.append((scroll_wrapper, img_widget, "image"))
 
         render_current_page()
 
@@ -343,7 +364,7 @@ def build_weekly_tab(page: ft.Page):
 
     weekly_main_view = ft.Stack(
         controls=[
-            page_display_container,
+            viewer_viewport,
             ft.Container(
                 content=floating_zoom_pill,
                 alignment=ft.Alignment(0, 0.94),
