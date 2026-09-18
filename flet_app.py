@@ -127,7 +127,7 @@ def build_weekly_tab(page: ft.Page):
     current_page_idx = [0]
     loaded_pages = []
 
-    page_display_col = ft.Container(
+    page_display_container = ft.Container(
         alignment=ft.Alignment(0, 0),
         expand=True,
     )
@@ -136,18 +136,18 @@ def build_weekly_tab(page: ft.Page):
     def render_current_page():
         total = len(loaded_pages)
         if total == 0:
-            page_display_col.content = ft.Text("No document pages found.", italic=True)
+            page_display_container.content = ft.Text("No document pages found.", italic=True)
             btn_prev.disabled = True
             btn_next.disabled = True
             page_indicator.value = "Page 0 / 0"
         else:
             idx = current_page_idx[0]
-            page_display_col.content = loaded_pages[idx]
+            page_display_container.content = loaded_pages[idx]
             page_indicator.value = f"Page {idx + 1} / {total}"
             btn_prev.disabled = (idx == 0)
             btn_next.disabled = (idx >= total - 1)
 
-        safe_update(page_display_col)
+        safe_update(page_display_container)
         safe_update(btn_prev)
         safe_update(btn_next)
         safe_update(page_indicator)
@@ -162,14 +162,6 @@ def build_weekly_tab(page: ft.Page):
         if current_page_idx[0] > 0:
             current_page_idx[0] -= 1
             render_current_page()
-
-    # Touch swipe velocity handler: swipe left -> next page, swipe right -> prev page
-    def on_drag_end(e: ft.DragEndEvent):
-        if e.primary_velocity is not None:
-            if e.primary_velocity < -250:  # Swiped Left
-                flip_next()
-            elif e.primary_velocity > 250:  # Swiped Right
-                flip_prev()
 
     btn_prev = ft.IconButton(
         icon=ft.Icons.ARROW_BACK_IOS_NEW_ROUNDED,
@@ -190,14 +182,14 @@ def build_weekly_tab(page: ft.Page):
     )
 
     def apply_zoom(new_val):
-        val = max(0.3, min(3.5, round(new_val, 2)))
+        val = max(0.4, min(3.0, round(new_val, 2)))
         zoom_level[0] = val
         pct_text = f"{int(val * 100)}%"
         zoom_label.value = pct_text
         new_w = int(DEFAULT_DOC_WIDTH * val)
         for c in loaded_pages:
             try:
-                # Target the inner image/text container inside the gesture detector
+                # Direct resize of the document child container
                 c.content.content.width = new_w
             except Exception:
                 pass
@@ -250,7 +242,7 @@ def build_weekly_tab(page: ft.Page):
                         text_body = tf.read()
                 except Exception:
                     text_body = "Error reading text preview."
-                c = ft.Container(
+                inner_content = ft.Container(
                     content=ft.Text(text_body, selectable=True),
                     width=DEFAULT_DOC_WIDTH,
                     bgcolor=BG_SURFACE_LIGHT,
@@ -259,28 +251,23 @@ def build_weekly_tab(page: ft.Page):
                 )
             else:
                 img = ft.Image(src=path, fit="contain")
-                pinch_viewer = ft.InteractiveViewer(
-                    content=img,
-                    min_scale=0.3,
-                    max_scale=3.5,
-                    pan_enabled=True,
-                    scale_enabled=True,
-                    constrained=False,
-                    boundary_margin=600,
-                )
-                c = ft.Container(content=pinch_viewer, width=DEFAULT_DOC_WIDTH)
+                inner_content = ft.Container(content=img, width=DEFAULT_DOC_WIDTH)
 
-            # Wrap in GestureDetector for edge swipe gestures
-            swipe_gesture_wrapper = ft.GestureDetector(
-                content=ft.Container(
-                    content=c,
-                    alignment=ft.Alignment(0, 0),
-                    expand=True,
-                ),
-                on_horizontal_drag_end=on_drag_end,
+            # Native Flutter InteractiveViewer handles 2D panning and pinch zoom cleanly
+            pinch_viewer = ft.InteractiveViewer(
+                content=inner_content,
+                min_scale=0.5,
+                max_scale=3.5,
+                pan_enabled=True,
+                scale_enabled=True,
+            )
+
+            card_wrapper = ft.Container(
+                content=pinch_viewer,
+                alignment=ft.Alignment(0, -1),
                 expand=True,
             )
-            loaded_pages.append(swipe_gesture_wrapper)
+            loaded_pages.append(card_wrapper)
 
         render_current_page()
 
@@ -356,7 +343,7 @@ def build_weekly_tab(page: ft.Page):
 
     weekly_main_view = ft.Stack(
         controls=[
-            page_display_col,
+            page_display_container,
             ft.Container(
                 content=floating_zoom_pill,
                 alignment=ft.Alignment(0, 0.94),
