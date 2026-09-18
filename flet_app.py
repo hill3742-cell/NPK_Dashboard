@@ -182,7 +182,7 @@ def build_weekly_tab(page: ft.Page):
     )
 
     def apply_zoom(new_val):
-        val = max(0.4, min(3.5, round(new_val, 2)))
+        val = max(0.40, min(2.50, round(new_val, 2)))
         zoom_level[0] = val
         pct_text = f"{int(val * 100)}%"
         zoom_label.value = pct_text
@@ -190,7 +190,6 @@ def build_weekly_tab(page: ft.Page):
 
         for card in loaded_pages:
             try:
-                # Target the inner container holding the image/text inside InteractiveViewer
                 card.content.width = new_w
             except Exception:
                 pass
@@ -260,15 +259,14 @@ def build_weekly_tab(page: ft.Page):
                     width=BASE_WIDTH,
                 )
 
-            # Native Flutter free pan viewer: handles dragging up/down/left/right seamlessly
+            # Unconstrained viewer allowing up to 250% expansion and 4-way pan
             panning_canvas = ft.InteractiveViewer(
                 content=inner_widget,
                 pan_enabled=True,
                 scale_enabled=True,
                 min_scale=0.4,
-                max_scale=3.5,
-                pan_axis="free",
-                clip_behavior="none",
+                max_scale=2.5,
+                constrained=False,
             )
 
             loaded_pages.append(panning_canvas)
