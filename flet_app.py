@@ -362,7 +362,11 @@ def build_weekly_tab(page: ft.Page):
         expand=True,
     )
 
-    header_controls = ft.Row([dd_year, dd_prev, dd_recap], spacing=6)
+    header_controls = ft.Row(
+        [dd_year, dd_prev, dd_recap],
+        spacing=4,
+        scroll=ft.ScrollMode.ADAPTIVE,
+    )
     return weekly_main_view, header_controls
 
 
@@ -1986,29 +1990,37 @@ def main(page: ft.Page):
         top_bar.visible = False
         master_divider.visible = False
 
-        left_side = custom_header_left if custom_header_left else ft.Text(
-            title, size=18, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER
+        left_content = custom_header_left if custom_header_left else ft.Text(
+            title, size=17, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER, no_wrap=True
+        )
+
+        # Expand=True prevents left header from pushing the right controls off-screen
+        left_side = ft.Container(
+            content=left_content,
+            expand=True,
+        )
+
+        right_controls = ft.Row(
+            controls=[
+                chat_trigger_btn,
+                ft.IconButton(
+                    icon=ft.Icons.CLOSE,
+                    icon_size=22,
+                    icon_color=ft.Colors.WHITE,
+                    tooltip="Back to Home Menu",
+                    on_click=close_to_home,
+                ),
+            ],
+            spacing=2,
+            tight=True,
         )
 
         fullscreen_layout = ft.Column(
             controls=[
                 ft.Row(
-                    controls=[
-                        left_side,
-                        ft.Row(
-                            [
-                                chat_trigger_btn,
-                                ft.IconButton(
-                                    icon=ft.Icons.CLOSE,
-                                    icon_color=ft.Colors.WHITE70,
-                                    tooltip="Back to Home Menu",
-                                    on_click=close_to_home,
-                                ),
-                            ],
-                            spacing=4,
-                        ),
-                    ],
+                    controls=[left_side, right_controls],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 ft.Divider(height=2),
                 ft.Container(content=content_control, expand=True),
