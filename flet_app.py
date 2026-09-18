@@ -373,82 +373,101 @@ def build_weekly_tab(page: ft.Page):
 # ---------------------------------------------------------
 # TAB 2: HISTORY ARCHIVES (PINCH-TO-ZOOM & COLLAPSIBLE HEADER)
 # ---------------------------------------------------------
-def build_history_tab(page: ft.Page) -> ft.Control:
-    history_display = ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+def build_history_tab(page: ft.Page):
+    client_w = getattr(page, "width", None) or 750
+    base_width = int(client_w - 20) if (client_w and 300 < client_w < 750) else 750
 
-    history_scale = [1.0]
-    history_zoom_label = ft.Text("100%", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_AMBER)
-    history_containers = []
+    zoom_level = [1.0]
+    zoom_label = ft.Text("100%", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
-    def set_history_zoom(factor, reset=False):
-        if reset:
-            history_scale[0] = 1.0
+    current_page_idx = [0]
+    loaded_pages = []
+
+    viewer_container = ft.Container(
+        expand=True,
+        alignment=ft.Alignment(0, 0),
+    )
+    page_indicator = ft.Text("Page 1 / 1", size=12, color=ft.Colors.GREY_300, weight=ft.FontWeight.BOLD)
+
+    def render_current_page():
+        total = len(loaded_pages)
+        if total == 0:
+            viewer_container.content = ft.Text("No archive images found for this season.", italic=True, size=15)
+            btn_prev.disabled = True
+            btn_next.disabled = True
+            page_indicator.value = "Page 0 / 0"
         else:
-            history_scale[0] = max(0.4, min(2.5, round(history_scale[0] + factor, 2)))
+            idx = current_page_idx[0]
+            viewer_container.content = loaded_pages[idx]
+            page_indicator.value = f"Page {idx + 1} / {total}"
+            btn_prev.disabled = (idx == 0)
+            btn_next.disabled = (idx >= total - 1)
 
-        history_zoom_label.value = f"{int(history_scale[0] * 100)}%"
-        new_w = int(750 * history_scale[0])
-        for c in history_containers:
-            c.width = new_w
+        safe_update(viewer_container)
+        safe_update(btn_prev)
+        safe_update(btn_next)
+        safe_update(page_indicator)
         safe_update(page)
 
-    history_zoom_bar = ft.Container(
-        content=ft.Row(
-            [
-                ft.Text("Zoom / Pinch:", weight=ft.FontWeight.BOLD, size=13),
-                ft.Button("➖", on_click=lambda e: set_history_zoom(-0.25)),
-                history_zoom_label,
-                ft.Button("➕", on_click=lambda e: set_history_zoom(0.25)),
-                ft.Button("↺ Reset", on_click=lambda e: set_history_zoom(0, reset=True)),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=6,
-        ),
-        bgcolor=BG_SURFACE_LIGHT,
-        padding=6,
-        border_radius=8,
+    def flip_next(e=None):
+        if current_page_idx[0] < len(loaded_pages) - 1:
+            current_page_idx[0] += 1
+            render_current_page()
+
+    def flip_prev(e=None):
+        if current_page_idx[0] > 0:
+            current_page_idx[0] -= 1
+            render_current_page()
+
+    btn_prev = ft.IconButton(
+        icon=ft.Icons.ARROW_BACK_IOS_NEW_ROUNDED,
+        icon_size=16,
+        icon_color=ft.Colors.AMBER_400,
+        tooltip="Previous Graphic",
+        on_click=flip_prev,
+        disabled=True,
     )
 
-    years = [str(y) for y in range(2025, 2010, -1)]
-    dd_history_year = ft.Dropdown(
-        label="Select Season",
-        options=[create_option(y) for y in years],
-        value="2025",
-        width=150,
+    btn_next = ft.IconButton(
+        icon=ft.Icons.ARROW_FORWARD_IOS_ROUNDED,
+        icon_size=16,
+        icon_color=ft.Colors.AMBER_400,
+        tooltip="Next Graphic",
+        on_click=flip_next,
+        disabled=True,
     )
 
-    history_controls_column = ft.Column(
-        controls=[
-            ft.Text("Historical Season Archives", size=18, weight=ft.FontWeight.BOLD),
-            ft.Row([dd_history_year], alignment=ft.MainAxisAlignment.START),
-            history_zoom_bar,
-        ],
-        spacing=6,
-        visible=True,
-    )
+    def apply_zoom(new_val):
+        val = max(0.40, min(2.50, round(new_val, 2)))
+        zoom_level[0] = val
+        pct_text = f"{int(val * 100)}%"
+        zoom_label.value = pct_text
+        new_w = int(base_width * val)
 
-    btn_toggle_history_controls = ft.TextButton(
-        "▲ Hide Controls / Fullscreen",
-        icon=ft.Icons.KEYBOARD_ARROW_UP,
-    )
+        for card in loaded_pages:
+            try:
+                card.content.width = new_w
+            except Exception:
+                pass
 
-    def toggle_history_controls(e):
-        history_controls_column.visible = not history_controls_column.visible
-        if history_controls_column.visible:
-            btn_toggle_history_controls.text = "▲ Hide Controls / Fullscreen"
-            btn_toggle_history_controls.icon = ft.Icons.KEYBOARD_ARROW_UP
-        else:
-            btn_toggle_history_controls.text = "▼ Show Controls & Zoom Bar"
-            btn_toggle_history_controls.icon = ft.Icons.KEYBOARD_ARROW_DOWN
+        safe_update(viewer_container)
+        safe_update(zoom_label)
         safe_update(page)
 
-    btn_toggle_history_controls.on_click = toggle_history_controls
+    def zoom_in(e):
+        apply_zoom(zoom_level[0] + 0.15)
+
+    def zoom_out(e):
+        apply_zoom(zoom_level[0] - 0.15)
+
+    def reset_zoom(e):
+        apply_zoom(1.0)
 
     def load_season_images(year):
-        history_display.controls.clear()
-        history_containers.clear()
-        history_scale[0] = 1.0
-        history_zoom_label.value = "100%"
+        loaded_pages.clear()
+        current_page_idx[0] = 0
+        zoom_level[0] = 1.0
+        zoom_label.value = "100%"
 
         search_dirs = [HISTORY_DIR, ASSETS_DIR]
         pattern = re.compile(rf"^{year}.*\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
@@ -461,58 +480,74 @@ def build_history_tab(page: ft.Page) -> ft.Control:
                         rel_path = f"/history/{fname}" if d == HISTORY_DIR else f"/{fname}"
                         found_images.append(rel_path)
 
-        if found_images:
-            for img_path in found_images:
-                pinch_viewer = ft.InteractiveViewer(
-                    content=ft.Image(src=img_path, fit="contain"),
-                    min_scale=0.4,
-                    max_scale=2.5,
-                    pan_enabled=True,
-                    scale_enabled=True,
-                )
-                c = ft.Container(content=pinch_viewer, width=750)
-                history_containers.append(c)
-
-                scrollable_row = ft.Row(
-                    controls=[c],
-                    scroll=ft.ScrollMode.ADAPTIVE,
-                    alignment=ft.MainAxisAlignment.CENTER,
-                )
-                history_display.controls.append(
-                    ft.Card(
-                        content=ft.Container(content=scrollable_row, padding=6),
-                        margin=ft.Margin(0, 6, 0, 6),
-                    )
-                )
-        else:
-            history_display.controls.append(
-                ft.Text(f"No archive images found for season {year}.", italic=True, size=15)
+        for img_path in found_images:
+            inner_widget = ft.Container(
+                content=ft.Image(src=img_path, fit="contain"),
+                width=base_width,
             )
-        safe_update(history_display)
 
+            panning_canvas = ft.InteractiveViewer(
+                content=inner_widget,
+                pan_enabled=True,
+                scale_enabled=True,
+                min_scale=0.4,
+                max_scale=3.0,
+                constrained=False,
+                boundary_margin=ft.Margin(300, 300, 300, 300),
+            )
+            loaded_pages.append(panning_canvas)
+
+        render_current_page()
+
+    years = [str(y) for y in range(2025, 2010, -1)]
+    dd_history_year = ft.Dropdown(
+        options=[create_option(y, f"{y} Season") for y in years],
+        value="2025",
+        width=140,
+        dense=True,
+    )
     dd_history_year.on_change = lambda e: load_season_images(dd_history_year.value)
-    load_season_images("2025")
 
-    fixed_top_header = ft.Column(
+    floating_zoom_pill = ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.IconButton(icon=ft.Icons.REMOVE, icon_size=18, tooltip="Zoom Out", on_click=zoom_out),
+                zoom_label,
+                ft.IconButton(icon=ft.Icons.ADD, icon_size=18, tooltip="Zoom In", on_click=zoom_in),
+                ft.Container(width=1, height=18, bgcolor=ft.Colors.WHITE24),
+                btn_prev,
+                page_indicator,
+                btn_next,
+                ft.Container(width=1, height=18, bgcolor=ft.Colors.WHITE24),
+                ft.TextButton("Reset", on_click=reset_zoom),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=4,
+            tight=True,
+        ),
+        bgcolor="#E020232A",
+        border_radius=25,
+        padding=ft.Padding(12, 2, 12, 2),
+        shadow=ft.BoxShadow(blur_radius=10, color="#60000000"),
+    )
+
+    history_main_view = ft.Stack(
         controls=[
-            ft.Row([btn_toggle_history_controls], alignment=ft.MainAxisAlignment.END),
-            history_controls_column,
-            ft.Divider(height=10),
+            viewer_container,
+            ft.Container(
+                content=ft.Row([floating_zoom_pill], alignment=ft.MainAxisAlignment.CENTER),
+                bottom=20,
+                left=0,
+                right=0,
+                height=50,
+            ),
         ],
-        spacing=4,
-    )
-
-    scrollable_viewer = ft.Column(
-        controls=[history_display],
-        scroll=ft.ScrollMode.ADAPTIVE,
         expand=True,
     )
 
-    return ft.Column(
-        controls=[fixed_top_header, scrollable_viewer],
-        expand=True,
-        spacing=5,
-    )
+    load_season_images("2025")
+    header_controls = ft.Row([dd_history_year], spacing=4)
+    return history_main_view, header_controls
 
 
 # ---------------------------------------------------------
@@ -2032,11 +2067,11 @@ def main(page: ft.Page):
         page.update()
 
     # Pre-built module views
-    weekly_module, weekly_nav_controls = build_weekly_tab(page)
-    history_module = build_history_tab(page)
-    draft_module = build_draft_tab(page)
-    keeper_module = build_keeper_tab(page)
-    help_module = build_help_center_tab(page)
+  weekly_module, weekly_nav_controls = build_weekly_tab(page)
+  history_module, history_nav_controls = build_history_tab(page)
+  draft_module = build_draft_tab(page)
+  keeper_module = build_keeper_tab(page)
+  help_module = build_help_center_tab(page)
 
     def make_launcher_card(title: str, subtitle: str, icon_name, on_click_action):
         return ft.Container(
@@ -2080,11 +2115,11 @@ def main(page: ft.Page):
                         lambda e: open_fullscreen_module("Weekly Previews & Recaps", weekly_module, custom_header_left=weekly_nav_controls),
                     ),
                     make_launcher_card(
-                        "History Archives",
-                        "Past season graphics",
-                        ft.Icons.HISTORY_ROUNDED,
-                        lambda e: open_fullscreen_module("Historical Archives", history_module),
-                    ),
+                      "History Archives",
+                      "Past season graphics",
+                      ft.Icons.HISTORY_ROUNDED,
+                      lambda e: open_fullscreen_module("Historical Archives", history_module, custom_header_left=history_nav_controls),
+                  ),
                     make_launcher_card(
                         "Draft Results",
                         "Searchable board & picks",
