@@ -83,6 +83,68 @@ def safe_update(control_or_page):
     except Exception:
         pass
 
+def make_zoomable_viewport(content_control: ft.Control, page: ft.Page) -> ft.Control:
+    """Wraps any table or view in native 4-way pan + pinch-to-zoom with a floating pill toolbar."""
+    zoom_level = [1.0]
+    zoom_label = ft.Text("100%", size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+
+    zoom_box = ft.Container(
+        content=content_control,
+        scale=1.0,
+        alignment=ft.Alignment(-1, -1),
+    )
+
+    def apply_zoom(new_val):
+        val = max(0.50, min(2.50, round(new_val, 2)))
+        zoom_level[0] = val
+        zoom_label.value = f"{int(val * 100)}%"
+        zoom_box.scale = val
+        safe_update(zoom_box)
+        safe_update(zoom_label)
+        safe_update(page)
+
+    floating_pill = ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.IconButton(icon=ft.Icons.REMOVE, icon_size=18, tooltip="Zoom Out", on_click=lambda e: apply_zoom(zoom_level[0] - 0.15)),
+                zoom_label,
+                ft.IconButton(icon=ft.Icons.ADD, icon_size=18, tooltip="Zoom In", on_click=lambda e: apply_zoom(zoom_level[0] + 0.15)),
+                ft.Container(width=1, height=18, bgcolor=ft.Colors.WHITE24),
+                ft.TextButton("Reset", on_click=lambda e: apply_zoom(1.0)),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=6,
+            tight=True,
+        ),
+        bgcolor="#E020232A",
+        border_radius=25,
+        padding=ft.Padding(12, 2, 12, 2),
+        shadow=ft.BoxShadow(blur_radius=10, color="#60000000"),
+    )
+
+    panning_canvas = ft.InteractiveViewer(
+        content=zoom_box,
+        pan_enabled=True,
+        scale_enabled=True,
+        min_scale=0.5,
+        max_scale=2.5,
+        constrained=False,
+        boundary_margin=ft.Margin(300, 300, 300, 300),
+    )
+
+    return ft.Stack(
+        controls=[
+            panning_canvas,
+            ft.Container(
+                content=ft.Row([floating_pill], alignment=ft.MainAxisAlignment.CENTER),
+                bottom=20,
+                left=0,
+                right=0,
+                height=50,
+            ),
+        ],
+        expand=True,
+    )
 
 # ---------------------------------------------------------
 # TAB 1: WEEKLY HUB (PREVIEWS & RECAPS WITH PINCH-TO-ZOOM)
@@ -632,15 +694,24 @@ def build_draft_tab(page: ft.Page) -> ft.Control:
 
     render_table()
 
-    return ft.ListView(
+    zoomable_table_view = make_zoomable_viewport(table_container, page)
+
+    return ft.Column(
         expand=True,
-        spacing=12,
-        padding=12,
+        spacing=8,
         controls=[
-            ft.Text("NPK Draft Results & History", size=20, weight=ft.FontWeight.BOLD),
-            ft.Row([dd_year, dd_team_filter, txt_search], wrap=True, spacing=10),
-            ft.Divider(height=10),
-            table_container,
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("NPK Draft Results & History", size=20, weight=ft.FontWeight.BOLD),
+                        ft.Row([dd_year, dd_team_filter, txt_search], wrap=True, spacing=10),
+                        ft.Divider(height=6),
+                    ],
+                    spacing=6,
+                ),
+                padding=ft.Padding(12, 8, 12, 0),
+            ),
+            ft.Container(content=zoomable_table_view, expand=True),
         ],
     )
 
@@ -713,15 +784,25 @@ def build_keeper_tab(page: ft.Page) -> ft.Control:
 
     render_roster()
 
-    return ft.ListView(
+    zoomable_roster_view = make_zoomable_viewport(roster_container, page)
+
+    return ft.Column(
         expand=True,
-        spacing=15,
-        padding=15,
+        spacing=8,
         controls=[
-            ft.Text("Franchise Keeper Roster & 2027 Projections", size=22, weight=ft.FontWeight.BOLD),
-            ft.Text("Official keeper pick costs vs. traded reset values (traded players reset to Year 2):", italic=True),
-            dd_team,
-            roster_container,
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Franchise Keeper Roster & 2027 Projections", size=22, weight=ft.FontWeight.BOLD),
+                        ft.Text("Official keeper pick costs vs. traded reset values (traded players reset to Year 2):", italic=True),
+                        dd_team,
+                        ft.Divider(height=6),
+                    ],
+                    spacing=6,
+                ),
+                padding=ft.Padding(12, 8, 12, 0),
+            ),
+            ft.Container(content=zoomable_roster_view, expand=True),
         ],
     )
 
@@ -1696,14 +1777,21 @@ def build_help_center_tab(page: ft.Page) -> ft.Control:
         spacing=4,
     )
 
-    scrollable_viewer = ft.Column(
-        controls=[filtered_list],
-        scroll=ft.ScrollMode.ADAPTIVE,
-        expand=True,
+    # Bounded width container keeps rule cards and tables sized correctly in the panning canvas
+    client_w = getattr(page, "width", None) or 800
+    rules_width = int(client_w - 20) if (client_w and 300 < client_w < 800) else 800
+
+    rules_viewport_container = ft.Container(
+        content=filtered_list,
+        width=rules_width,
     )
+    zoomable_rules_view = make_zoomable_viewport(rules_viewport_container, page)
 
     return ft.Column(
-        controls=[fixed_top_header, scrollable_viewer],
+        controls=[
+            fixed_top_header,
+            ft.Container(content=zoomable_rules_view, expand=True),
+        ],
         expand=True,
         spacing=5,
     )
@@ -2073,79 +2161,90 @@ def main(page: ft.Page):
     keeper_module = build_keeper_tab(page)
     help_module = build_help_center_tab(page)
 
-    def make_launcher_card(title: str, subtitle: str, icon_name, on_click_action):
+    def resolve_icon_path(short_name: str, original_name: str) -> str:
+        """Finds whichever filename exists in the assets folder."""
+        if os.path.exists(os.path.join(ASSETS_DIR, short_name)):
+            return f"/{short_name}"
+        return f"/{original_name}"
+
+    icon_weekly = resolve_icon_path("icon_weekly.jpg", "NPK App Icon - Weekly Hub.jpg")
+    icon_history = resolve_icon_path("icon_history.jpg", "NPK App Icon - History Archives.jpg")
+    icon_draft = resolve_icon_path("icon_draft.jpg", "NPK App Icon - Draft Results.jpg")
+    icon_keeper = resolve_icon_path("icon_keeper.jpg", "NPK App Icon - Keeper Calculator.jpg")
+    icon_rules = resolve_icon_path("icon_rules.jpg", "NPK App Icon - Rules & Help.jpg")
+
+    def make_launcher_card(img_src: str, on_click_action, tooltip_text: str):
         return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Icon(icon_name, size=38, color=ACCENT_AMBER),
-                    ft.Text(title, size=16, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
-                    ft.Text(subtitle, size=12, color=ft.Colors.GREY_400, text_align=ft.TextAlign.CENTER),
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=6,
+            content=ft.Image(
+                src=img_src,
+                fit="cover",
+                border_radius=16,
             ),
-            width=165,
-            height=140,
+            width=150,
+            height=150,
+            border_radius=16,
             bgcolor=BG_SURFACE_LIGHT,
-            border_radius=12,
-            padding=10,
             ink=True,
+            tooltip=tooltip_text,
             on_click=on_click_action,
+            shadow=ft.BoxShadow(
+                blur_radius=10,
+                spread_radius=1,
+                color="#60000000",
+            ),
         )
 
-    home_launcher_view = ft.Column(
-        controls=[
-            ft.Container(
-                content=ft.Column(
+    home_launcher_view = ft.Container(
+        content=ft.Column(
+            controls=[
+                ft.Column(
                     controls=[
-                        ft.Text("Welcome to NPK League Hub", size=20, weight=ft.FontWeight.BOLD),
-                        ft.Text("Select a module below to open full screen:", size=13, color=ft.Colors.GREY_400),
+                        ft.Text("Welcome to NPK League Hub", size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                        ft.Text("Select a module below to open full screen:", size=13, color=ft.Colors.GREY_400, text_align=ft.TextAlign.CENTER),
                     ],
-                    spacing=2,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
                 ),
-                padding=ft.Padding(0, 8, 0, 12),
-            ),
-            ft.Row(
-                controls=[
-                    make_launcher_card(
-                        "Weekly Hub",
-                        "Previews, recaps & stats",
-                        ft.Icons.AUTO_STORIES_ROUNDED,
-                        lambda e: open_fullscreen_module("Weekly Previews & Recaps", weekly_module, custom_header_left=weekly_nav_controls),
-                    ),
-                    make_launcher_card(
-                      "History Archives",
-                      "Past season graphics",
-                      ft.Icons.HISTORY_ROUNDED,
-                      lambda e: open_fullscreen_module("Historical Archives", history_module, custom_header_left=history_nav_controls),
-                  ),
-                    make_launcher_card(
-                        "Draft Results",
-                        "Searchable board & picks",
-                        ft.Icons.FORMAT_LIST_NUMBERED_ROUNDED,
-                        lambda e: open_fullscreen_module("Draft Results & History", draft_module),
-                    ),
-                    make_launcher_card(
-                        "Keeper Roster",
-                        "Calculated costs & traded resets",
-                        ft.Icons.SECURITY_ROUNDED,
-                        lambda e: open_fullscreen_module("Franchise Keeper Roster", keeper_module),
-                    ),
-                    make_launcher_card(
-                        "Rules & Help",
-                        "Scoring, payouts & divisions",
-                        ft.Icons.HELP_OUTLINE_ROUNDED,
-                        lambda e: open_fullscreen_module("Rules, Scoring & Help Center", help_module),
-                    ),
-                ],
-                wrap=True,
-                spacing=14,
-                run_spacing=14,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-        ],
-        scroll=ft.ScrollMode.ADAPTIVE,
+                ft.Container(height=16),
+                ft.Row(
+                    controls=[
+                        make_launcher_card(
+                            icon_weekly,
+                            lambda e: open_fullscreen_module("Weekly Previews & Recaps", weekly_module, custom_header_left=weekly_nav_controls),
+                            "Weekly Hub",
+                        ),
+                        make_launcher_card(
+                            icon_history,
+                            lambda e: open_fullscreen_module("Historical Archives", history_module, custom_header_left=history_nav_controls),
+                            "History Archives",
+                        ),
+                        make_launcher_card(
+                            icon_draft,
+                            lambda e: open_fullscreen_module("Draft Results & History", draft_module),
+                            "Draft Results",
+                        ),
+                        make_launcher_card(
+                            icon_keeper,
+                            lambda e: open_fullscreen_module("Franchise Keeper Roster", keeper_module),
+                            "Keeper Roster",
+                        ),
+                        make_launcher_card(
+                            icon_rules,
+                            lambda e: open_fullscreen_module("Rules, Scoring & Help Center", help_module),
+                            "Rules & Help",
+                        ),
+                    ],
+                    wrap=True,
+                    spacing=18,
+                    run_spacing=18,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            tight=True,
+        ),
+        alignment=ft.Alignment(0, 0),
         expand=True,
     )
 
@@ -2171,10 +2270,33 @@ def main(page: ft.Page):
         spacing=2,
     )
 
+    # Custom background image behind all app views
+    background_layer = ft.Container(
+        content=ft.Image(
+            src="/background.jpg",
+            fit="cover",
+            opacity=0.30,
+        ),
+        top=0,
+        bottom=0,
+        left=0,
+        right=0,
+    )
+
+    # Fullscreen container providing bounded dimensions for layout and scrolling
+    dashboard_layer = ft.Container(
+        content=dashboard_layout,
+        top=0,
+        bottom=0,
+        left=0,
+        right=0,
+    )
+
     page.add(
         ft.Stack(
             controls=[
-                dashboard_layout,
+                background_layer,
+                dashboard_layer,
                 identity_overlay_layer,
             ],
             expand=True,
