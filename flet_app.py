@@ -341,50 +341,103 @@ def build_weekly_tab(page: ft.Page):
 
     all_items = get_weekly_items()
     years = sorted(list({str(i["year"]) for i in all_items}), reverse=True) or ["2026"]
-
-    previews = [i for i in all_items if i["type"].lower() == "preview"]
-    recaps = [i for i in all_items if i["type"].lower() == "recap"]
+    current_year = [years[0]]
 
     dd_year = ft.Dropdown(
         options=[create_option(y) for y in years],
         value=years[0],
-        width=85,
+        width=95,
+        text_size=12,
+        content_padding=ft.Padding(8, 0, 2, 0),
         dense=True,
     )
 
     dd_prev = ft.Dropdown(
         hint_text="Previews",
-        options=[create_option(p["key"], f"W{p['week']} Prev") for p in previews],
-        value=previews[0]["key"] if previews else None,
-        width=135,
+        width=142,
+        text_size=12,
+        content_padding=ft.Padding(8, 0, 2, 0),
         dense=True,
     )
 
     dd_recap = ft.Dropdown(
         hint_text="Recaps",
-        options=[create_option(r["key"], f"W{r['week']} Recap") for r in recaps],
-        value=recaps[0]["key"] if recaps else None,
-        width=135,
+        width=130,
+        text_size=12,
+        content_padding=ft.Padding(8, 0, 2, 0),
         dense=True,
     )
 
+    def populate_dropdowns_for_year(year_str, auto_load=True):
+        y_int = int(year_str) if str(year_str).isdigit() else 2026
+        year_items = [i for i in all_items if i["year"] == y_int]
+        year_previews = [i for i in year_items if i["type"].lower() == "preview"]
+        year_recaps = [i for i in year_items if i["type"].lower() == "recap"]
+
+        dd_prev.options = [create_option(p["key"], f"W{p['week']} Preview") for p in year_previews]
+        dd_recap.options = [create_option(r["key"], f"W{r['week']} Recap") for r in year_recaps]
+
+        if year_previews:
+            dd_prev.value = year_previews[0]["key"]
+            dd_recap.value = None
+            if auto_load:
+                load_item(year_previews[0])
+        elif year_recaps:
+            dd_prev.value = None
+            dd_recap.value = year_recaps[0]["key"]
+            if auto_load:
+                load_item(year_recaps[0])
+        else:
+            dd_prev.value = None
+            dd_recap.value = None
+            if auto_load:
+                loaded_pages.clear()
+                render_current_page()
+
+        safe_update(dd_year)
+        safe_update(dd_prev)
+        safe_update(dd_recap)
+        safe_update(page)
+
+    def on_year_change(e):
+        selected_val = getattr(e, "data", None) or getattr(e.control, "value", None) or years[0]
+        current_year[0] = str(selected_val)
+        dd_year.value = str(selected_val)
+        populate_dropdowns_for_year(str(selected_val), auto_load=True)
+
     def on_prev_change(e):
-        match = next((i for i in previews if i["key"] == dd_prev.value), None)
+        selected_val = getattr(e, "data", None) or getattr(e.control, "value", None)
+        dd_prev.value = selected_val
+        dd_recap.value = None
+        match = next((i for i in all_items if i["key"] == selected_val), None)
         if match:
             load_item(match)
+        safe_update(dd_prev)
+        safe_update(dd_recap)
+        safe_update(page)
 
     def on_recap_change(e):
-        match = next((i for i in recaps if i["key"] == dd_recap.value), None)
+        selected_val = getattr(e, "data", None) or getattr(e.control, "value", None)
+        dd_recap.value = selected_val
+        dd_prev.value = None
+        match = next((i for i in all_items if i["key"] == selected_val), None)
         if match:
             load_item(match)
+        safe_update(dd_prev)
+        safe_update(dd_recap)
+        safe_update(page)
 
+    dd_year.on_change = on_year_change
     dd_prev.on_change = on_prev_change
     dd_recap.on_change = on_recap_change
+    if hasattr(dd_year, "on_select"):
+        dd_year.on_select = on_year_change
+    if hasattr(dd_prev, "on_select"):
+        dd_prev.on_select = on_prev_change
+    if hasattr(dd_recap, "on_select"):
+        dd_recap.on_select = on_recap_change
 
-    if previews:
-        load_item(previews[0])
-    elif recaps:
-        load_item(recaps[0])
+    populate_dropdowns_for_year(years[0], auto_load=True)
 
     floating_zoom_pill = ft.Container(
         content=ft.Row(
@@ -532,7 +585,8 @@ def build_history_tab(page: ft.Page):
         zoom_label.value = "100%"
 
         search_dirs = [HISTORY_DIR, ASSETS_DIR]
-        pattern = re.compile(rf"^{year}.*\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
+        # Matches any graphic containing the selected 4-digit year (e.g. 2024.png, 2024_NPK.jpg, NPK_2024.webp)
+        pattern = re.compile(rf".*{year}.*\.(png|jpg|jpeg|webp)$", re.IGNORECASE)
         found_images = []
 
         for d in search_dirs:
@@ -565,10 +619,22 @@ def build_history_tab(page: ft.Page):
     dd_history_year = ft.Dropdown(
         options=[create_option(y, f"{y} Season") for y in years],
         value="2025",
-        width=140,
+        width=160,
+        text_size=12,
+        content_padding=ft.Padding(8, 0, 2, 0),
         dense=True,
     )
-    dd_history_year.on_change = lambda e: load_season_images(dd_history_year.value)
+
+    def on_history_year_change(e):
+        selected_year = getattr(e, "data", None) or getattr(e.control, "value", None) or "2025"
+        dd_history_year.value = selected_year
+        load_season_images(selected_year)
+        safe_update(dd_history_year)
+        safe_update(page)
+
+    dd_history_year.on_change = on_history_year_change
+    if hasattr(dd_history_year, "on_select"):
+        dd_history_year.on_select = on_history_year_change
 
     floating_zoom_pill = ft.Container(
         content=ft.Row(
