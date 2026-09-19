@@ -2263,6 +2263,7 @@ def main(page: ft.Page):
     home_launcher_view = ft.Container(
         content=ft.Column(
             controls=[
+                ft.Container(height=12),
                 ft.Column(
                     controls=[
                         ft.Text("Welcome to NPK League Hub", size=24, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
@@ -2305,12 +2306,12 @@ def main(page: ft.Page):
                     run_spacing=18,
                     alignment=ft.MainAxisAlignment.CENTER,
                 ),
+                ft.Container(height=45),  # Buffer padding so the bottom icon is fully visible when scrolled
             ],
-            alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            tight=True,
+            scroll=ft.ScrollMode.ADAPTIVE,
         ),
-        alignment=ft.Alignment(0, 0),
+        alignment=ft.Alignment(0, -1),
         expand=True,
     )
 
